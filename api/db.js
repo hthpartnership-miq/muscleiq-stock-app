@@ -9,9 +9,7 @@
 
 const crypto = require("crypto");
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
-const PASSCODE = process.env.APP_PASSCODE || "";
+const { SUPABASE_URL, SUPABASE_KEY, PASSCODE } = require("./_config");
 
 async function rpc(fn, args) {
   const r = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
