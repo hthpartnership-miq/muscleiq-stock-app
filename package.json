@@ -1,0 +1,7 @@
+{
+  "name": "muscleiq-stock-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MuscleIQ warehouse stock app: rack counts, reservations, containers and Shopify stock.",
+  "engines": { "node": ">=20" }
+}

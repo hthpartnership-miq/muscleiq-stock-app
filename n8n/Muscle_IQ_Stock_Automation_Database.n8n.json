@@ -1,0 +1,210 @@
+{
+  "name": "Muscle IQ Stock Automation (Database)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Muscle IQ Stock Automation (Database)\n\nSame logic as the Google Sheets flow, with the database as the stock master.\n\n**Before publishing**\n1. Run `01_schema.sql` then `02_seed_from_sheet.sql` in the database.\n2. Open **Deduct Stock in Database** and pick your Postgres credential.\n3. Check the Shopify and SMTP credentials are selected.\n\n**What the database step does, in one go**\n- Records the order. If it was already recorded, nothing else happens.\n- Matches each line's variant ID to the mapping, skipping unmapped variants.\n- Takes the totals off every matching stock item and writes the log rows.\n- Returns one row per item, flagged when it crosses its threshold.",
+        "height": 420,
+        "width": 520
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -640
+      ],
+      "id": "b1bb8bc3-1239-422e-947e-684fbe8295d7",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "topic": "orders/paid"
+      },
+      "type": "n8n-nodes-base.shopifyTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        -144
+      ],
+      "id": "7e6c6758-a7f2-4efd-820f-2e9ff3c8d698",
+      "name": "Shopify Trigger",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "DJ5I7tJTLe9WbNLK",
+          "name": "Shopify Access Token (Stock Automation)"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        96
+      ],
+      "id": "5f97229d-357c-4b5e-943d-1906892807e3",
+      "name": "Manual Test"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Test order for the manual trigger. It deducts real stock ONCE:\n// 24KGNORM -2, NEWBENCH -1, ADSNORM -1 (variant MIQ-ADPO-004).\n// Running it again does nothing, because order TEST-001 is already recorded.\nreturn [\n  {\n    json: {\n      id: 'TEST-001',\n      name: '#TEST-001',\n      line_items: [\n        { variant_id: 53211248099664, sku: 'MIQ-ADPO-004', quantity: 1, title: 'Test line' },\n      ],\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ],
+      "id": "73b3666b-7db4-40a4-a6a4-ad3527fc5cd8",
+      "name": "Fake Test Order"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns the Shopify order into one item for the database step.\n// The line items travel as base64 text so commas and quotes cannot break the query parameter.\nconst order = $input.first().json;\n\nconst lines = (order.line_items || []).map(item => ({\n  order_id: String(order.id),\n  order_name: order.name,\n  variant_id: String(item.variant_id),\n  sku: item.sku,\n  quantity_sold: Number(item.quantity),\n}));\n\nif (lines.length === 0) {\n  return [];\n}\n\nreturn [\n  {\n    json: {\n      order_id: String(order.id),\n      order_name: order.name,\n      line_count: lines.length,\n      lines,\n      payload_b64: Buffer.from(JSON.stringify(lines), 'utf8').toString('base64'),\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        -144
+      ],
+      "id": "14a8acbb-f979-4433-bdce-95422e37ca68",
+      "name": "Extract Line Items"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH lines AS (\n  SELECT x.order_id, x.order_name, x.variant_id, x.sku, x.quantity_sold, t.ord\n  FROM jsonb_array_elements(convert_from(decode($1, 'base64'), 'UTF8')::jsonb) WITH ORDINALITY AS t(j, ord)\n  CROSS JOIN LATERAL jsonb_to_record(t.j) AS x(order_id text, order_name text, variant_id text, sku text, quantity_sold integer)\n),\nmap AS (\n  SELECT DISTINCT trim(shopify_variant_id) AS variant_id, shopify_sku, trim(item_code) AS item_code, qty_deduct_per_sale\n  FROM variant_mapping\n),\nwant AS (\n  SELECT m.item_code,\n         SUM(l.quantity_sold * m.qty_deduct_per_sale)::integer AS deduct_qty,\n         (array_agg(l.variant_id    ORDER BY l.ord))[1] AS variant_id,\n         (array_agg(l.sku           ORDER BY l.ord))[1] AS sku,\n         (array_agg(l.quantity_sold ORDER BY l.ord))[1] AS sold_qty\n  FROM lines l\n  JOIN map m ON m.variant_id = trim(l.variant_id)\n  GROUP BY m.item_code\n),\nord AS (\n  INSERT INTO processed_orders (shopify_order_id, order_name, status)\n  SELECT f.order_id, f.order_name,\n         CASE WHEN EXISTS (SELECT 1 FROM want w JOIN stock_items s ON s.item_code = w.item_code)\n              THEN 'Deducted' ELSE 'No stock items matched' END\n  FROM (SELECT order_id, order_name FROM lines ORDER BY ord LIMIT 1) f\n  ON CONFLICT (shopify_order_id) DO NOTHING\n  RETURNING shopify_order_id, order_name\n),\nupd AS (\n  UPDATE stock_items s\n  SET current_stock = s.current_stock - w.deduct_qty, last_updated = now()\n  FROM want w, ord o\n  WHERE s.item_code = w.item_code\n  RETURNING o.shopify_order_id AS order_id, o.order_name, w.variant_id, w.sku, w.sold_qty,\n            s.item_code, s.item_name, s.stock_threshold, w.deduct_qty,\n            s.current_stock + w.deduct_qty AS stock_before, s.current_stock AS stock_after\n),\nlogged AS (\n  INSERT INTO stock_log (order_id, order_name, variant_id, sku, item_code, sold_qty, deduct_qty, stock_before, stock_after)\n  SELECT order_id, order_name, variant_id, sku, item_code, sold_qty, deduct_qty, stock_before, stock_after FROM upd\n  RETURNING id\n)\nSELECT u.order_id, u.order_name, u.variant_id, u.sku, u.sold_qty AS quantity_sold,\n       u.item_code, u.item_name, u.stock_threshold, u.deduct_qty, u.stock_before, u.stock_after,\n       (u.stock_after <= u.stock_threshold AND u.stock_before > u.stock_threshold) AS is_low_stock,\n       (SELECT count(*) FROM logged) AS log_rows\nFROM upd u\nORDER BY u.item_code",
+        "options": {
+          "queryReplacement": "={{ [$json.payload_b64] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        704,
+        -144
+      ],
+      "id": "96893359-444a-4093-a02a-696cdeda049b",
+      "name": "Deduct Stock in Database",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\n\nconst lowStockItems = items.filter(item => item.is_low_stock === true);\n\nif (lowStockItems.length === 0) {\n  return [];\n}\n\nreturn [\n  {\n    json: {\n      order_id: lowStockItems[0].order_id,\n      order_name: lowStockItems[0].order_name,\n      low_stock_items: lowStockItems,\n      message: lowStockItems.map(item =>\n        `${item.item_code} - ${item.item_name || ''}: current stock ${item.stock_after}, threshold ${item.stock_threshold}`\n      ).join('\\n'),\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        -144
+      ],
+      "id": "1e0fd81c-98f7-4cd2-8922-123cf6bca7fe",
+      "name": "Collect Low Stock Alerts"
+    },
+    {
+      "parameters": {
+        "fromEmail": "MuscleIQ Stock Alerts <hthpartnership@gmail.com>",
+        "toEmail": "hthpartnership@gmail.com",
+        "subject": "=Low Stock Alert - {{$json.order_name}}",
+        "html": "=<h2 style=\"margin:0 0 16px;\">Low Stock Alert</h2>\n\n<p>\n  The following stock item(s) fell to or below their threshold after processing\n  <strong>{{$json.order_name}}</strong>.\n</p>\n\n{{\n  $json.low_stock_items.map(item => `\n    <div style=\"margin:16px 0;padding:16px;border:1px solid #dddddd;border-radius:8px;\">\n      <div style=\"font-size:16px;font-weight:700;\">${item.item_code}</div>\n      <div style=\"margin-top:4px;\">${item.item_name || ''}</div>\n\n      <table style=\"margin-top:12px;border-collapse:collapse;\">\n        <tr>\n          <td style=\"padding:4px 16px 4px 0;\">Current stock</td>\n          <td style=\"padding:4px 0;font-weight:700;\">${item.stock_after}</td>\n        </tr>\n        <tr>\n          <td style=\"padding:4px 16px 4px 0;\">Stock threshold</td>\n          <td style=\"padding:4px 0;font-weight:700;\">${item.stock_threshold}</td>\n        </tr>\n      </table>\n    </div>\n  `).join('')\n}}\n\n<p>\n  Please review the related Shopify products and variants and decide whether they should be made unavailable.\n</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1184,
+        -144
+      ],
+      "id": "46cba43a-538c-4a6a-8a0d-5d5c7a6da13a",
+      "name": "Send an Email",
+      "credentials": {
+        "smtp": {
+          "id": "qTg7rGHfoDnvUGc9",
+          "name": "MIQ Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Shopify Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Line Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "Fake Test Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fake Test Order": {
+      "main": [
+        [
+          {
+            "node": "Extract Line Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Line Items": {
+      "main": [
+        [
+          {
+            "node": "Deduct Stock in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduct Stock in Database": {
+      "main": [
+        [
+          {
+            "node": "Collect Low Stock Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Low Stock Alerts": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/London",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "71i0fr3LNpNZZeMc"
+  },
+  "tags": []
+}
