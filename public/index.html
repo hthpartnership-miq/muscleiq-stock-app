@@ -213,7 +213,7 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
   <header class="top">
     <div>
       <p class="eyebrow">MuscleIQ warehouse</p>
-      <h1>Rack stock</h1>
+      <h1>Stock</h1>
     </div>
     <div class="total">
       <div class="num" id="grand">–</div>
@@ -223,10 +223,10 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
   </header>
 
   <div class="tabs" role="tablist">
-    <button role="tab" id="tab-stock" data-tab="stock" aria-selected="true">Stock</button>
-    <button role="tab" id="tab-items" data-tab="items" aria-selected="false">Shopify stock</button>
+    <button role="tab" id="tab-stock" data-tab="stock" aria-selected="true">Rack stock</button>
     <button role="tab" id="tab-out" data-tab="out" aria-selected="false">Reserved / sold</button>
-    <button role="tab" id="tab-inc" data-tab="inc" aria-selected="false">Coming in</button>
+    <button role="tab" id="tab-items" data-tab="items" aria-selected="false">Shopify stock</button>
+    <button role="tab" id="tab-inc" data-tab="inc" aria-selected="false">Racks coming in</button>
     <button role="tab" id="tab-x" data-tab="x" aria-selected="false">Other stock</button>
     <button role="tab" id="tab-parts" data-tab="parts" aria-selected="false">Spare parts</button>
     <button role="tab" id="tab-labels" data-tab="labels" aria-selected="false">QR labels</button>
@@ -1253,7 +1253,7 @@ function renderInc() {
     }
     box.append(sec);
   }
-  $("tab-inc").textContent = "Coming in" + (total ? " ("+total+")" : "");
+  $("tab-inc").textContent = "Racks coming in" + (total ? " ("+total+")" : "");
   if ($("icon").open) renderIcon();
   if ($("ilr").open) renderIlr();
 }
