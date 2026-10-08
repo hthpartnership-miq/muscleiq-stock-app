@@ -138,6 +138,25 @@ select{background:var(--surface);border:1px solid var(--line);border-radius:var(
 .orows .rbw{display:flex;margin-left:auto;padding-left:36px}
 .orows .ob{display:flex;gap:6px;flex-wrap:wrap}
 .orows.res li{border-left:5px solid var(--res)} .orows.sold li{border-left:5px solid var(--sold)}
+/* Reserved tab: one block per order. Orange = send today, yellow = tomorrow, red = date passed. */
+#res-list{background:none;border:0;display:flex;flex-direction:column;gap:12px}
+#res-list li{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--res);border-radius:10px;padding:14px 14px 14px 12px}
+#res-list li.empty{border-left-width:1px}
+#res-list li.today{background:#f0891c;border-color:#f0891c;color:#1c1000}
+#res-list li.tmrw{background:#f2c200;border-color:#f2c200;color:#231a00}
+#res-list li.late{background:#c62820;border-color:#c62820;color:#ffffff}
+#res-list li.today small,#res-list li.tmrw small,#res-list li.late small,
+#res-list li.today small b,#res-list li.tmrw small b,#res-list li.late small b{color:inherit}
+#res-list li.today .sbox,#res-list li.tmrw .sbox,#res-list li.late .sbox{background:rgba(255,255,255,.6);color:#1c1000}
+#res-list li.late .btn.sold{background:#ffffff;color:#a8261d;border-color:#ffffff}
+#res-list li.today .btn:not(.sold),#res-list li.tmrw .btn:not(.sold),#res-list li.late .btn:not(.sold){background:#ffffff;color:#131a25;border-color:#ffffff}
+.ordno{display:flex;align-items:baseline;gap:8px;margin:4px 0 2px;font-size:17px}
+.ordno b{font-family:var(--display);font-size:32px;font-weight:700;line-height:1;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.dsum{display:flex;gap:8px;flex-wrap:wrap}
+.dsum span{display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:8px 10px 8px 12px;font-size:16px;font-weight:600}
+.dsum b{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 7px;border-radius:99px;background:#131a25;color:#ffffff;font-size:16px}
+.dsum .today{background:#f0891c;color:#1c1000} .dsum .tmrw{background:#f2c200;color:#231a00}
+.dsum .zero{opacity:.55}
 .field{border:1px solid var(--line);background:var(--bg);border-radius:var(--r);min-height:48px;padding:8px 12px;width:100%;min-width:0;font-weight:400;color:var(--ink);font-size:16px}
 .fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .fields label{display:flex;flex-direction:column;gap:3px;font-size:13px;font-weight:600;color:var(--muted);min-width:0}
@@ -234,7 +253,7 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
 
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-stock" data-tab="stock" aria-selected="true">Rack stock</button>
-    <button role="tab" id="tab-out" data-tab="out" aria-selected="false">Reserved / sold</button>
+    <button role="tab" id="tab-out" data-tab="out" aria-selected="false">Reserved</button>
     <button role="tab" id="tab-items" data-tab="items" aria-selected="false">Shopify stock</button>
     <button role="tab" id="tab-inc" data-tab="inc" aria-selected="false">Racks coming in</button>
     <button role="tab" id="tab-parts" data-tab="parts" aria-selected="false">Spare parts</button>
@@ -278,13 +297,10 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
 
   <section id="view-out" hidden>
     <div style="display:flex;flex-direction:column;gap:24px">
+      <div class="dsum" id="dsum"></div>
       <div class="bay">
         <div class="bay-head"><h2><span class="chip res">Reserved</span> <span id="res-count"></span></h2><span>Soonest send date first</span></div>
         <ul class="rows orows res" id="res-list"></ul>
-      </div>
-      <div class="bay">
-        <div class="bay-head"><h2><span class="chip sold">Sold</span> <span id="sold-count"></span></h2><span>Most recent 200</span></div>
-        <ul class="rows orows sold" id="sold-list"></ul>
       </div>
     </div>
   </section>
@@ -376,10 +392,7 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
         <input id="q-n" type="number" inputmode="numeric" min="1" step="1" value="1" aria-label="How many">
         <button id="q-inc" aria-label="One more">+</button>
       </div>
-      <div class="acts">
-        <button class="btn res" id="b-res">Reserve 1</button>
-        <button class="btn sold" id="b-sold">Sold 1</button>
-      </div>
+      <button class="btn res" id="b-res" style="min-height:58px;font-size:18px">Reserve 1</button>
       <button class="btn go" id="b-in">Put 1 in stock</button>
       <details id="sh-set">
         <summary>Set exact count (stock take)</summary>
@@ -425,7 +438,7 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
       <div>
         <p class="eyebrow" id="spl-fam"></p>
         <h2 id="spl-title" tabindex="-1" autofocus></h2>
-        <p class="note">Rare one-off versions at this height. Tap Open to change a count, reserve or sell.</p>
+        <p class="note">Rare one-off versions at this height. Tap Open to change a count or reserve.</p>
       </div>
     </div>
     <ul class="rows orows" id="spl-list"></ul>
@@ -455,7 +468,6 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
       <label>Order number<input class="field" id="e-order" type="text" maxlength="40" autocomplete="off"></label>
       <label>Send date<input class="field" id="e-send" type="date"></label>
       <label class="wide">Name<input class="field" id="e-note" type="text" maxlength="80" autocomplete="off"></label>
-      <label class="wide">Status<select id="e-status"><option value="reserved">Reserved</option><option value="sold">Sold</option></select></label>
     </div>
     <button class="btn in" id="e-save">Save changes</button>
     <p class="msg" id="ed-msg" role="alert" hidden></p>
@@ -466,6 +478,19 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
       <p class="note">Undo adds the rack back to the stock count. Delete only removes this entry.</p>
     </div>
     <div class="closebar"><button class="btn" id="ed-close2">Close</button></div>
+  </div>
+</dialog>
+<dialog id="dsp" aria-labelledby="dsp-title">
+  <div class="sheet">
+    <h2 id="dsp-title" tabindex="-1" autofocus>Mark as dispatched?</h2>
+    <p id="dsp-what" style="font-size:18px;font-weight:600;margin:0"></p>
+    <p class="note" id="dsp-sub"></p>
+    <p class="note">This removes the order from the Reserved list. Stock does not change, because reserving already took the rack out. A line is kept in History.</p>
+    <p class="msg" id="dsp-msg" role="alert" hidden></p>
+    <div class="acts">
+      <button class="btn" id="dsp-no">Cancel</button>
+      <button class="btn sold" id="dsp-yes">Yes, dispatched</button>
+    </div>
   </div>
 </dialog>
 <dialog id="icon" aria-labelledby="ic-title">
@@ -688,10 +713,10 @@ const longDay = k => new Intl.DateTimeFormat("en-GB", { weekday:"long", day:"num
 let db = null, user = null, downloads = null, meId = null, canWrite = true;
 let ready = false, busy = false, openSku = null, scanned = false;
 const stock = new Map();
-let entries = [], reserved = [], sold = [];
+let entries = [], reserved = [];
 const resBySku = new Map();
-const KIND = { in:"Put in", reserve:"Reserved", sold:"Sold", out:"Taken out", "res-sold":"Sold (was reserved)", release:"Reservation undone, back in stock", unsold:"Sale undone, back in stock", "sold-res":"Moved back to reserved", "del-res":"Reserved entry deleted", "del-sold":"Sold entry deleted", set:"Stock take" };
-const dCls = e => e.k === "reserve" ? "res" : (e.k === "sold" || e.k === "res-sold" || e.k === "out") ? "sold" : e.d > 0 ? "in" : "";
+const KIND = { in:"Put in", reserve:"Reserved", sold:"Sold", out:"Taken out", "res-sold":"Sold (was reserved)", release:"Reservation undone, back in stock", unsold:"Sale undone, back in stock", "sold-res":"Moved back to reserved", "del-res":"Reserved entry deleted", "del-sold":"Sold entry deleted", dispatch:"Dispatched", set:"Stock take" };
+const dCls = e => e.k === "reserve" ? "res" : (e.k === "sold" || e.k === "res-sold" || e.k === "out" || e.k === "dispatch") ? "sold" : e.d > 0 ? "in" : "";
 const dTxt = e => e.d > 0 ? "+"+e.d : e.d < 0 ? "−"+Math.abs(e.d) : String(e.n || "");
 const qty = id => num((stock.get(id) || {}).qty);
 function labelOf(id) { const l = (stock.get(id) || {}).label; return typeof l === "string" ? l : ""; }
@@ -800,7 +825,7 @@ function tally(fromKey) {
   for (const e of entries) if (e.day >= fromKey) {
     const n = e.n || Math.abs(e.d);
     if (e.k === "in") i += n; else if (e.k === "reserve") r += n;
-    else if (e.k === "sold" || e.k === "res-sold" || e.k === "out") sd += n;
+    else if (e.k === "sold" || e.k === "res-sold" || e.k === "out" || e.k === "dispatch") sd += n;
     else if (e.k === "release" || e.k === "del-res") r -= n;
     else if (e.k === "unsold" || e.k === "del-sold" || e.k === "sold-res") sd -= n;
   }
@@ -809,7 +834,7 @@ function tally(fromKey) {
 function strip(node) {
   node.textContent = "";
   const today = tally(dayKey()), wk = tally(dayKey(new Date(Date.now() - 6*864e5)));
-  const add = (label, t) => { const s = el("span"); s.append(document.createTextNode(label+" "), el("b", null, "+"+t.i+" in"), document.createTextNode(" · "), el("b", null, t.r+" reserved"), document.createTextNode(" · "), el("b", null, t.sd+" sold")); node.append(s); };
+  const add = (label, t) => { const s = el("span"); s.append(document.createTextNode(label+" "), el("b", null, "+"+t.i+" in"), document.createTextNode(" · "), el("b", null, t.r+" reserved"), document.createTextNode(" · "), el("b", null, t.sd+" dispatched")); node.append(s); };
   add("Today", today); add("Last 7 days", wk);
 }
 
@@ -817,8 +842,14 @@ function strip(node) {
 function whenTxt(t) { if (!t) return ""; const d = new Date(t); return longDay(dayKey(d))+", "+timeFmt.format(d); }
 const sendFmt = new Intl.DateTimeFormat("en-GB", { weekday:"short", day:"numeric", month:"short", timeZone:"UTC" });
 const sendTxt = d => sendFmt.format(new Date(d+"T12:00:00Z"));
+function sendCls(r) {
+  if (r.status !== "reserved" || r.inc || !r.send) return "";
+  const today = dayKey(), tmrw = dayKey(new Date(Date.now() + 864e5));
+  return r.send < today ? "late" : r.send === today ? "today" : r.send === tmrw ? "tmrw" : "";
+}
 function outRow(r, ps, hideInc) {
-  const s = sku(r.s), li = el("li");
+  const s = sku(r.s), li = el("li"), sc = sendCls(r);
+  if (sc) li.className = sc;
   li.append(el("span", "on", r.n));
   const w = el("span", "w"), tl = el("span", "tl"); tl.append(el("span", null, s ? s.spec : (r.spec || r.s)));
   if (s && !r.inc && ready) { const q = qty(s.id); tl.append(el("span", "sbox"+(q === 0 ? " none" : ""), q+" left in stock")); }
@@ -826,19 +857,19 @@ function outRow(r, ps, hideInc) {
   const who = (r.by && ps[r.by] && ps[r.by].name) || "";
   const l1 = el("small");
   l1.append(document.createTextNode(s ? s.g.name : r.gname));
-  const l1b = el("small");
-  if (r.order) l1b.append(document.createTextNode("Order number: "), el("b", null, r.order));
+  const l1b = el("div");
+  if (r.order) { l1b.className = "ordno"; l1b.append(document.createTextNode("Order number:"), el("b", null, r.order)); }
   const l1c = el("small"), l1d = el("small");
   if (r.note) l1c.append(document.createTextNode("Name: "), el("b", null, r.note));
   const l2 = el("small");
-  if (r.send) { const late = r.status === "reserved" && r.send < dayKey(); l1d.append(document.createTextNode("Send date: "), el("b", late ? "late" : null, sendTxt(r.send)+(late ? " (date passed)" : ""))); }
+  if (r.send) { const late = r.status === "reserved" && r.send < dayKey(); l1d.append(document.createTextNode("Send date: "), el("b", late && sc !== "late" ? "late" : null, sendTxt(r.send)+(late ? " (date passed)" : sc === "today" ? " (today)" : sc === "tmrw" ? " (tomorrow)" : ""))); }
   l2.append(document.createTextNode(r.status === "sold" ? "Sold date: " : "Reserved date: "), el("b", null, whenTxt(r.t)), document.createTextNode(who ? " · "+who : ""));
   w.append(l1); if (r.order) w.append(l1b); if (r.note) w.append(l1c); if (r.send) w.append(l1d);
   if (r.inc && !hideInc) { const c = incoming.find(x => x.id === r.inc.ship), li2 = el("small"); li2.append(el("b", null, c ? "Coming in on "+c.tag+(c.arrive ? ", arriving "+sendTxt(c.arrive) : "") : "From "+r.inc.tag)); w.append(li2); }
   w.append(l2); li.append(w);
   if (canWrite) {
     const ob = el("span", "ob");
-    if (r.status === "reserved" && !r.inc) { const a = el("button", "btn sold sm", "Mark sold"); a.type = "button"; a.disabled = busy; a.addEventListener("click", () => recAct(r.id, "sold")); ob.append(a); }
+    if (r.status === "reserved" && !r.inc) { const a = el("button", "btn sold sm", "Mark as dispatched"); a.type = "button"; a.disabled = busy; a.addEventListener("click", () => openDsp(r)); ob.append(a); }
     const c = el("button", "btn sm", "Edit"); c.type = "button"; c.disabled = busy; c.addEventListener("click", () => openEdit(r));
     ob.append(c); li.append(ob);
   }
@@ -853,7 +884,7 @@ function openEdit(r) {
   $("ed-fam").textContent = s ? s.g.name : r.gname;
   $("ed-title").textContent = r.n+" × "+(s ? s.spec : (r.spec || r.s));
   $("ed-meta").textContent = (r.status === "sold" ? "Sold " : "Reserved ")+whenTxt(r.t);
-  $("e-order").value = r.order; $("e-send").value = r.send; $("e-note").value = r.note; $("e-status").value = r.status;
+  $("e-order").value = r.order; $("e-send").value = r.send; $("e-note").value = r.note;
   $("ed-msg").hidden = true; renderEdit();
   if (!$("edit").open) $("edit").showModal();
 }
@@ -877,14 +908,10 @@ async function editSave() {
   const id = editRec.id;
   const order = $("e-order").value.trim().slice(0, 40), note = $("e-note").value.trim().slice(0, 80);
   const send = /^\d{4}-\d\d-\d\d$/.test($("e-send").value) ? $("e-send").value : "";
-  const status = $("e-status").value === "sold" ? "sold" : "reserved";
   busy = true; armed = ""; $("ed-msg").hidden = true; renderEdit();
   try {
     const { ref, b } = await loadRec(id);
-    const at = new Date().toISOString(), up = { order, note, send, status };
-    if (status !== b.status && status === "sold") up.t = at;
-    await once(() => ref.update(up));
-    if (status !== b.status) await addLog({ inc: !!b.inc, s: logS(b), d: 0, n: num(b.n) || 1, q: qty(b.s), k: status === "sold" ? "res-sold" : "sold-res", t: at, by: meId });
+    await once(() => ref.update({ order, note, send }));
     $("edit").close(); say("Entry saved.", false);
   } catch (e) { edErr(e); }
   finally { busy = false; refresh(); renderEdit(); }
@@ -914,23 +941,59 @@ async function editRemove(mode) {
   finally { armed = ""; busy = false; refresh(); renderEdit(); }
 }
 
-let outTok = 0;
+let outTok = 0, outDay = "";
+setInterval(() => { if (outDay && dayKey() !== outDay) renderOut(); }, 60000);
+
+/* ---------- Mark as dispatched (removes the reserved entry; stock already came off when reserved) ---------- */
+let dspRec = null;
+function openDsp(r) {
+  if (busy || !db) return;
+  dspRec = r;
+  const s = sku(r.s);
+  $("dsp-what").textContent = (r.order ? "Order "+r.order+": " : "")+r.n+" × "+(s ? s.spec : (r.spec || r.s));
+  $("dsp-sub").textContent = [s ? s.g.name : r.gname, r.note ? "Name: "+r.note : "", r.send ? "Send date: "+sendTxt(r.send) : ""].filter(Boolean).join(" · ");
+  $("dsp-msg").hidden = true; $("dsp-yes").disabled = false; $("dsp-no").disabled = false;
+  if (!$("dsp").open) $("dsp").showModal();
+}
+async function doDsp() {
+  if (busy || !db || !dspRec) return;
+  const id = dspRec.id;
+  busy = true; $("dsp-yes").disabled = true; $("dsp-no").disabled = true; $("dsp-msg").hidden = true; refresh();
+  try {
+    const ref = db.doc("out/"+id);
+    await lease(ref);
+    const snap = await once(() => ref.get());
+    const b = snap.exists ? snap.data() : null;
+    if (!b || b.status !== "reserved") throw { code: "gone" };
+    const n = num(b.n) || 1, at = new Date().toISOString();
+    await once(() => ref.delete());
+    await addLog({ s: logS(b), d: 0, n, q: qty(b.s), k: "dispatch", t: at, by: meId, order: b.order || "", note: b.note || "" });
+    $("dsp").close(); dspRec = null;
+    say("Dispatched"+(b.order ? " order "+b.order : "")+". Removed from Reserved.", false);
+  } catch (e) { const m = $("dsp-msg"); m.textContent = errText(e); m.hidden = false; $("dsp-no").disabled = false; $("dsp-yes").disabled = false; }
+  finally { busy = false; refresh(); }
+}
 async function renderOut() {
-  resBySku.clear(); let rt = 0, st = 0;
-  for (const r of reserved) if (!r.inc) { resBySku.set(r.s, (resBySku.get(r.s) || 0) + r.n); rt += r.n; }
-  for (const r of sold) st += r.n;
+  resBySku.clear(); let rt = 0, dt = 0, dm = 0;
+  for (const r of reserved) if (!r.inc) {
+    resBySku.set(r.s, (resBySku.get(r.s) || 0) + r.n); rt += r.n;
+    const c = sendCls(r); if (c === "today" || c === "late") dt++; else if (c === "tmrw") dm++;
+  }
+  outDay = dayKey();
   $("grand-sub").textContent = ready && rt ? rt+" reserved" : "";
-  $("tab-out").textContent = "Reserved / sold" + (rt ? " ("+rt+")" : "");
-  $("res-count").textContent = rt; $("sold-count").textContent = st;
+  $("tab-out").textContent = "Reserved" + (rt ? " ("+rt+")" : "");
+  $("res-count").textContent = rt;
+  const ds = $("dsum"); ds.textContent = "";
+  for (const [c, label, n] of [["today", "Dispatch today", dt], ["tmrw", "Dispatch tomorrow", dm]]) {
+    const sp = el("span", c + (n ? "" : " zero")); sp.append(document.createTextNode(label), el("b", null, n)); ds.append(sp);
+  }
   const tok = ++outTok; let ps = {};
-  if (user) { try { ps = await user.profiles([...new Set(reserved.concat(sold).map(r => r.by).filter(Boolean))]); } catch (_) {} }
+  if (user) { try { ps = await user.profiles([...new Set(reserved.map(r => r.by).filter(Boolean))]); } catch (_) {} }
   if (tok !== outTok) return;
-  const rl = $("res-list"), sl = $("sold-list"); rl.textContent = ""; sl.textContent = "";
+  const rl = $("res-list"); rl.textContent = "";
   const stockRes = reserved.filter(r => !r.inc);
   if (!stockRes.length) rl.append(el("li", "empty", "Nothing reserved. Scan a rack, add the order number and send date, and tap Reserve."));
   for (const r of stockRes) rl.append(outRow(r, ps));
-  if (!sold.length) sl.append(el("li", "empty", "Nothing sold yet. Scan a rack and tap Sold, or mark a reserved rack as sold."));
-  for (const r of sold) sl.append(outRow(r, ps));
 }
 
 /* ---------- History ---------- */
@@ -945,7 +1008,7 @@ async function clearHistory() {
       for (const d of snap.docs) await db.doc("log/"+d.id).delete();
       if (snap.size < 200) break;
     }
-    toast("History cleared. Stock, reserved and sold are unchanged.");
+    toast("History cleared. Stock and reserved are unchanged.");
   } catch (e) { toast(errText(e)); }
   finally { busy = false; refresh(); renderHistory(); }
 }
@@ -966,7 +1029,7 @@ async function renderHistory() {
     li.append(el("span", "d "+dCls(e), dTxt(e)));
     const w = el("span", "w", s ? s.g.name : e.s);
     const who = (e.by && ps[e.by] && ps[e.by].name) || "Someone";
-    w.append(el("small", null, (s ? s.spec : "")+" · "+(KIND[e.k] || "Changed")+" · "+who));
+    w.append(el("small", null, (s ? s.spec : "")+" · "+(KIND[e.k] || "Changed")+(e.order ? " (order "+e.order+")" : "")+" · "+who));
     li.append(w, el("span", "q", e.inc ? "" : e.q+" in stock"));
     ul.append(li);
   }
@@ -1018,9 +1081,9 @@ function renderSheet() {
   $("main-step").hidden = !!pending; $("det").hidden = !pending;
   $("det-title").textContent = pending === "sold" ? "Details for this sale" : "Details for this reservation";
   $("det-ok").textContent = (pending === "sold" ? "Sold " : "Reserve ")+n; $("det-ok").className = "btn "+(pending === "sold" ? "sold" : "res");
-  $("b-res").textContent = "Reserve "+n; $("b-sold").textContent = "Sold "+n; $("b-in").textContent = "Put "+n+" in stock";
+  $("b-res").textContent = "Reserve "+n; $("b-in").textContent = "Put "+n+" in stock";
   const off = busy || !ready || !canWrite || !db;
-  for (const id of ["b-res","b-sold","b-in","b-set","q-dec","q-inc","sp-save","det-ok"]) $(id).disabled = off;
+  for (const id of ["b-res","b-in","b-set","q-dec","q-inc","sp-save","det-ok"]) $(id).disabled = off;
   const mineR = reserved.filter(r => r.s === s.id), rl = $("sh-resv-list");
   $("sh-resv").hidden = !mineR.length; rl.textContent = "";
   for (const r of mineR) rl.append(outRow(r, {}));
@@ -2004,7 +2067,8 @@ $("q-dec").addEventListener("click", () => { $("q-n").value = Math.max(1, stepN(
 $("q-inc").addEventListener("click", () => { $("q-n").value = stepN() + 1; renderSheet(); });
 $("q-n").addEventListener("input", renderSheet);
 $("b-res").addEventListener("click", () => startDet("reserve"));
-$("b-sold").addEventListener("click", () => startDet("sold"));
+$("dsp-yes").addEventListener("click", doDsp);
+$("dsp-no").addEventListener("click", () => { if (!busy) $("dsp").close(); });
 $("det-ok").addEventListener("click", () => { if (pending) act(pending); });
 $("det-back").addEventListener("click", () => { pending = null; $("sh-msg").hidden = true; renderSheet(); });
 $("b-in").addEventListener("click", () => act("in"));
@@ -2086,7 +2150,6 @@ $("lab-save").addEventListener("click", async () => {
   }, fail);
   const recs = snap => snap.docs.map(d => { const b = d.data() || {}; return { id: d.id, inc: (b.inc && typeof b.inc === "object") ? { ship: String(b.inc.ship), line: String(b.inc.line), tag: String(b.inc.tag || "") } : null, spec: typeof b.spec === "string" ? b.spec : "", gname: typeof b.gname === "string" ? b.gname : "", s: String(b.s), n: num(b.n) || 1, status: b.status, order: typeof b.order === "string" ? b.order : "", send: typeof b.send === "string" ? b.send : "", note: typeof b.note === "string" ? b.note : "", t: b.t, by: b.by || null }; }).sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : 0));
   db.collection("out").where("status", "==", "reserved").onSnapshot(snap => { reserved = recs(snap).sort((a, b) => { const x = a.send || "9", y = b.send || "9"; return x < y ? -1 : x > y ? 1 : 0; }); refresh(); }, fail);
-  db.collection("out").where("status", "==", "sold").orderBy("t", "desc").limit(200).onSnapshot(snap => { sold = recs(snap); renderOut(); }, fail);
   db.collection("incoming").onSnapshot(snap => {
     incoming = snap.docs.map(incParse).sort((a, b) => { const x = a.arrive || "9", y = b.arrive || "9"; return x < y ? -1 : x > y ? 1 : a.tag.localeCompare(b.tag, undefined, { numeric: true }); });
     incReady = true; refresh();
@@ -2114,7 +2177,7 @@ $("lab-save").addEventListener("click", async () => {
   }, fail);
   db.collection("log").orderBy("day", "desc").limit(31).onSnapshot(snap => {
     const all = [];
-    for (const d of snap.docs) { const b = d.data() || {}; const es = b.entries || {}; for (const k in es) { const e = es[k]; if (e && typeof e.d === "number") all.push({ day: b.day || d.id, inc: !!e.inc, s: String(e.s), d: e.d, n: num(e.n), q: num(e.q), k: e.k, t: e.t, by: e.by || null }); } }
+    for (const d of snap.docs) { const b = d.data() || {}; const es = b.entries || {}; for (const k in es) { const e = es[k]; if (e && typeof e.d === "number") all.push({ day: b.day || d.id, inc: !!e.inc, s: String(e.s), d: e.d, n: num(e.n), q: num(e.q), k: e.k, t: e.t, by: e.by || null, order: typeof e.order === "string" ? e.order : "" }); } }
     all.sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : 0));
     entries = all; renderHistory(); if (openSku) renderSheet();
   }, fail);
