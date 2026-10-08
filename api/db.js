@@ -86,6 +86,9 @@ module.exports = async (req, res) => {
       const cid = b.collectionId == null || b.collectionId === "" ? null : Math.round(Number(b.collectionId));
       return reply(res, await rpc("app_item_collection", { p_code: id, p_collection: cid }));
     }
+    if (op === "item-hide") {
+      return reply(res, await rpc("app_item_hide", { p_code: id, p_hidden: b.hidden === true }));
+    }
     if (op === "item-type") {
       return reply(res, await rpc("app_item_type", { p_code: id, p_type: String(b.type || "") }));
     }

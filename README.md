@@ -81,6 +81,10 @@ Items are grouped into sections on the Shopify stock page. This grouping is for 
 - The **Section** menu in an item's Open pop-up moves it to another section.
 - Stored in `item_collections` and `stock_items.collection_id`.
 
+### Removing items
+
+**Remove from list** in an item's Open pop-up hides it (`stock_items.hidden`); nothing is deleted. Hidden items leave the list, sections, search, summary and alerts, but n8n still deducts them if the variant mapping points at them (the confirmation says how many variants do). **Removed items** at the bottom of the tab brings them back. Permanent deletes are done in Supabase, after the item's mapping rows are removed.
+
 ### Alerts
 
 The check runs inside the database (trigger `stock_items_watch`), so it catches orders from n8n and changes made in the app alike. Each alert is saved in `alert_outbox` and posted to the n8n workflow "Muscle IQ Stock Alerts (Database)", which emails hthpartnership@gmail.com. The webhook address and its shared secret are in `app_settings` (not in this repo). To add WhatsApp later, add a step to that workflow.

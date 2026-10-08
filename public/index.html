@@ -292,6 +292,11 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
       <label class="it-search">Find an item<input class="field" id="it-q" type="search" autocomplete="off" placeholder="Name or item code"></label>
       <div id="it-groups" style="display:flex;flex-direction:column;gap:24px"></div>
       <p class="empty" id="it-empty" hidden></p>
+      <details id="it-removed" hidden>
+        <summary id="it-removed-sum">Removed items</summary>
+        <p class="note" style="margin:8px 0">Hidden from this tab, not deleted. Orders still take stock off them if the variant mapping points at them. Tap Bring back to list one again.</p>
+        <ul class="rows orows" id="it-removed-list"></ul>
+      </details>
     </div>
   </section>
 
@@ -637,6 +642,13 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
     <label class="chk"><input type="checkbox" id="it-pre"><span>Pre-order item. Not kept in stock, so a minus number means orders waiting, and it never counts as low stock.</span></label>
     <details id="it-hist-d"><summary>Recent movements</summary><ul class="hist" id="it-hist"></ul></details>
     <p class="msg" id="it-msg" role="status" hidden></p>
+    <div class="fix">
+      <button class="btn sm" id="it-hide">Remove from list</button>
+      <div class="confirm" id="it-hideconf" hidden>
+        <p id="it-hide-text"></p>
+        <div class="acts"><button class="btn sold" id="it-hide-yes">Yes, remove</button><button class="btn" id="it-hide-no">Cancel</button></div>
+      </div>
+    </div>
     <div class="closebar"><button class="btn" id="it-close">Close</button></div>
   </div>
 </dialog>
@@ -1914,6 +1926,15 @@ function renderItems() {
   const strip = $("it-strip"); strip.textContent = "";
   const part = (n, label) => { const s = el("span"); s.append(el("b", null, String(n)), document.createTextNode(" " + label)); return s; };
   if (itemsReady) { strip.append(part(items.length, "items"), part(low, "low on stock"), part(neg, "below zero")); if (preN) strip.append(part(preN, "on pre-order")); }
+  const rm = $("it-removed"), rl = $("it-removed-list"); rl.textContent = "";
+  rm.hidden = !hiddenItems.length; $("it-removed-sum").textContent = "Removed items (" + hiddenItems.length + ")";
+  for (const i of hiddenItems) {
+    const li = el("li"), w = el("span", "w");
+    w.append(el("b", "spec", i.name || i.code), el("small", null, i.stock + " in stock" + (i.mapped ? " · " + i.mapped + (i.mapped === 1 ? " Shopify variant still takes" : " Shopify variants still take") + " stock from it" : "")));
+    const ob = el("span", "ob"), b = el("button", "btn sm", "Bring back"); b.type = "button"; b.disabled = busy;
+    b.addEventListener("click", () => colRun(() => window.miqItems.hide(i.code, false), (i.name || i.code) + " is back on the list."));
+    ob.append(b); li.append(w, ob); rl.append(li);
+  }
   const empty = $("it-empty");
   empty.hidden = !itemsReady || list.length > 0;
   empty.textContent = items.length ? "No item matches that search." : "No items yet. They appear here once the stock list is loaded into the database.";
@@ -1949,7 +1970,7 @@ $("it-col").addEventListener("change", e => {
   itRun(() => window.miqItems.moveTo(itCode, v === "" ? null : Number(v)), v === "" ? "Taken out of its section." : "Moved to " + colName(Number(v)) + ".");
 });
 
-let itCode = null, itPending = null;
+let itCode = null, itPending = null, itHideArm = false, hiddenItems = [];
 function itemByCode(c) { return items.find(i => i.code === c) || null; }
 function itSay(t, isErr) { const m = $("it-msg"); m.textContent = t; m.hidden = !t; m.className = isErr ? "msg" : "done"; }
 function renderItemSheet() {
@@ -1977,7 +1998,10 @@ function renderItemSheet() {
     ob.append(a, r); li.append(ob); ul.append(li);
   }
   $("it-lowclear").hidden = !i.alert;
-  for (const id of ["it-out", "it-in", "it-setb", "it-addinc", "it-lowsave", "it-lowclear", "it-confirm-yes", "it-dec-pre", "it-dec-keep"]) $(id).disabled = busy;
+  $("it-hide").hidden = itHideArm; $("it-hideconf").hidden = !itHideArm;
+  if (itHideArm) $("it-hide-text").textContent = "Remove " + (i.name || i.code) + " from the Shopify stock list? It is hidden, not deleted, and can be brought back from Removed items at the bottom of the tab. " +
+    (i.mapped ? i.mapped + (i.mapped === 1 ? " Shopify variant still takes" : " Shopify variants still take") + " stock from this item, so orders will keep deducting it." : "No Shopify variant takes stock from this item.");
+  for (const id of ["it-out", "it-in", "it-setb", "it-addinc", "it-lowsave", "it-lowclear", "it-confirm-yes", "it-dec-pre", "it-dec-keep", "it-hide", "it-hide-yes", "it-hide-no"]) $(id).disabled = busy;
 }
 async function loadItemHistory() {
   const ul = $("it-hist"), code = itCode; ul.textContent = "";
@@ -1995,7 +2019,7 @@ async function loadItemHistory() {
 }
 function openItem(code, toAlert) {
   const i = itemByCode(code); if (!i) return;
-  itCode = code; itPending = null; itSay("", false);
+  itCode = code; itPending = null; itHideArm = false; itSay("", false);
   $("it-n").value = 1; $("it-set").value = ""; $("it-incn").value = ""; $("it-date").value = ""; $("it-incnote").value = "";
   $("it-low").value = i.alert ? i.threshold : ""; $("it-alert").open = !!toAlert; $("it-count").open = false;
   renderItemSheet(); if (!$("itdl").open) $("itdl").showModal(); loadItemHistory();
@@ -2010,6 +2034,14 @@ async function itRun(fn, okText) {
   }
   finally { busy = false; renderItemSheet(); renderItems(); }
 }
+$("it-hide").addEventListener("click", () => { itHideArm = true; renderItemSheet(); $("it-hideconf").scrollIntoView({ block: "center" }); });
+$("it-hide-no").addEventListener("click", () => { itHideArm = false; renderItemSheet(); });
+$("it-hide-yes").addEventListener("click", async () => {
+  const i = itemByCode(itCode); if (!i) return;
+  const ok = await itRun(() => window.miqItems.hide(i.code, true), "");
+  itHideArm = false;
+  if (ok) { $("itdl").close(); itCode = null; toast((i.name || i.code) + " removed from the list."); }
+});
 function itCount(v) { const n = Number(String(v).trim()); return String(v).trim() !== "" && Number.isInteger(n) && n >= 0 ? n : null; }
 function itMove(dir) {
   const i = itemByCode(itCode); if (!i) return;
@@ -2168,11 +2200,12 @@ $("lab-save").addEventListener("click", async () => {
     renderItems(); if (itCode) renderItemSheet(); if ($("itpick").open) renderPick();
   }, fail);
   db.collection("items").onSnapshot(snap => {
-    items = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null, type: b.type === "pre-order" ? "pre-order" : "stocked",
-      alert: b.alert !== false, collection: b.collection == null ? null : Number(b.collection), decision: b.decision === "low" || b.decision === "zero" ? b.decision : null,
+    const allItems = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null, type: b.type === "pre-order" ? "pre-order" : "stocked",
+      alert: b.alert !== false, hidden: b.hidden === true, mapped: Number(b.mapped) || 0, collection: b.collection == null ? null : Number(b.collection), decision: b.decision === "low" || b.decision === "zero" ? b.decision : null,
       perSale: b.per_sale && typeof b.per_sale === "object" ? { min: b.per_sale.min == null ? null : Number(b.per_sale.min), max: b.per_sale.max == null ? null : Number(b.per_sale.max) } : null,
       incoming: Array.isArray(b.incoming) ? b.incoming.map(e => ({ id: e.id, qty: Number(e.qty) || 0, arrive: typeof e.arrive === "string" ? e.arrive : "", note: typeof e.note === "string" ? e.note : "" })) : [] }; })
       .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code, undefined, { numeric: true }));
+    items = allItems.filter(i => !i.hidden); hiddenItems = allItems.filter(i => i.hidden);
     itemsReady = true; renderItems(); if (itCode) renderItemSheet();
   }, fail);
   db.collection("log").orderBy("day", "desc").limit(31).onSnapshot(snap => {
