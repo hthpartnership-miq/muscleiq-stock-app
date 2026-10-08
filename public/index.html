@@ -194,7 +194,7 @@ table.items td.nm{padding:0}
 .itbtn{display:block;width:100%;min-height:52px;padding:9px 10px;border:0;background:none;text-align:left;color:inherit}
 .itbtn:hover b{text-decoration:underline}
 table.items .q.owed{color:var(--res-fg);font-size:17px}
-#it-list .spec{font-family:var(--body);font-size:16px;font-weight:600;line-height:1.3}
+#it-groups .spec,#itpick .spec{font-family:var(--body);font-size:16px;font-weight:600;line-height:1.3}
 .qbox.neg{background:var(--none-bg);color:var(--none)}
 .qbox.owed{background:var(--res);color:var(--res-ink)}
 .decide{background:var(--surface);border:1px solid var(--out);border-left:5px solid var(--out);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
@@ -264,9 +264,14 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
         <p class="note">These reached their alert level or went below zero. Switch each one to pre-order, or keep it as stocked.</p>
         <ul class="rows" id="it-decide-list"></ul>
       </div>
+      <div id="it-colform" style="display:flex;flex-direction:column;gap:8px;max-width:460px">
+        <div class="fields"><label class="wide">New section name<input class="field" id="it-colname" type="text" maxlength="60" autocomplete="off" placeholder="e.g. Hex Dumbbells"></label></div>
+        <div class="bar"><button class="btn in" id="it-coladd">Add section</button></div>
+        <p class="msg" id="it-colmsg" role="alert" hidden></p>
+      </div>
       <div class="strip" id="it-strip"></div>
       <label class="it-search">Find an item<input class="field" id="it-q" type="search" autocomplete="off" placeholder="Name or item code"></label>
-      <ul class="rows orows" id="it-list"></ul>
+      <div id="it-groups" style="display:flex;flex-direction:column;gap:24px"></div>
       <p class="empty" id="it-empty" hidden></p>
     </div>
   </section>
@@ -574,6 +579,7 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
     </div>
     <div class="qty"><span class="num" id="it-now">0</span><span id="it-unit">in stock</span></div>
     <p class="note" id="it-units"></p>
+    <div class="fields"><label class="wide">Section<select class="field" id="it-col"></select></label></div>
     <div class="fields"><label class="wide">How many<input class="field" id="it-n" type="number" inputmode="numeric" min="1" step="1" value="1"></label></div>
     <div class="acts">
       <button class="btn" id="it-out">Take out</button>
@@ -607,6 +613,14 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
     <details id="it-hist-d"><summary>Recent movements</summary><ul class="hist" id="it-hist"></ul></details>
     <p class="msg" id="it-msg" role="status" hidden></p>
     <div class="closebar"><button class="btn" id="it-close">Close</button></div>
+  </div>
+</dialog>
+<dialog id="itpick" aria-labelledby="pk-title">
+  <div class="sheet">
+    <div class="sh-head"><div><p class="eyebrow">Add items to section</p><h2 id="pk-title" tabindex="-1" autofocus></h2></div></div>
+    <label class="it-search">Find an item<input class="field" id="pk-q" type="search" autocomplete="off" placeholder="Name or item code"></label>
+    <ul class="rows orows" id="pk-list"></ul>
+    <div class="closebar"><button class="btn" id="pk-close">Done</button></div>
   </div>
 </dialog>
 <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -1754,29 +1768,72 @@ async function decide(code, choice) {
   catch (_) { toast("Could not save. Check the connection and try again."); }
   finally { busy = false; renderItems(); if (itCode) renderItemSheet(); }
 }
+let collections = [], colArm = "", colEdit = null, colEditVal = "";
+const colName = id => { const c = collections.find(x => x.id === id); return c ? c.name : ""; };
+function rowFor(i) {
+  const pre = isPre(i), low = isLow(i);
+  const li = el("li");
+  li.append(el("span", "on qbox" + (i.stock === 0 ? " none" : "") + (i.stock < 0 ? (pre ? " owed" : " neg") : ""), pre && i.stock < 0 ? String(-i.stock) : String(i.stock)));
+  const w = el("span", "w"), nb = el("b", "spec", i.name || i.code);
+  if (pre) nb.append(el("span", "pre", "Pre-order"));
+  w.append(nb);
+  if (pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", null, "Owed to customers")); w.append(sm); }
+  if (i.decision) { const sm = el("small"); sm.append(el("b", "late", "Needs a decision")); w.append(sm); }
+  else if (!pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", "late", "Below zero, already oversold")); w.append(sm); }
+  else if (low) { const sm = el("small"); sm.append(el("b", "late", "Low stock, alert set at " + i.threshold)); w.append(sm); }
+  for (const e of i.incoming) { const sm = el("small"); sm.append(el("b", e.arrive && e.arrive < dayKey() ? "late" : null, "+" + e.qty + " coming in" + (e.arrive ? ", arriving " + sendTxt(e.arrive) + (e.arrive < dayKey() ? " (date passed)" : "") : ""))); w.append(sm); }
+  li.append(w);
+  const ob = el("span", "ob"), b = el("button", "btn sm", "Open"); b.type = "button"; b.addEventListener("click", () => openItem(i.code, false));
+  const bell = el("button", "btn sm bell" + (i.alert ? " on" : "") + (low ? " low" : "")); bell.type = "button"; bell.innerHTML = BELL;
+  if (i.alert) bell.append(el("span", "bb", i.threshold));
+  bell.setAttribute("aria-label", i.alert ? "Low stock alert at " + i.threshold : "Set a low stock alert");
+  bell.addEventListener("click", () => openItem(i.code, true));
+  ob.append(b, bell); li.append(ob);
+  return li;
+}
+async function colRun(fn, okText) {
+  if (busy) return false; busy = true; renderItems();
+  try { await fn(); if (okText) toast(okText); return true; }
+  catch (e) { toast(e && e.code === "invalid_argument" && e.message ? e.message : "Could not save. Check the connection and try again."); return false; }
+  finally { busy = false; renderItems(); if ($("itpick").open) renderPick(); }
+}
 function renderItems() {
-  const ul = $("it-list"), q = $("it-q").value.trim().toLowerCase();
+  const box = $("it-groups"), q = $("it-q").value.trim().toLowerCase();
   const list = items.filter(i => !q || i.code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q));
-  ul.textContent = "";
-  for (const i of list) {
-    const pre = isPre(i), low = isLow(i);
-    const li = el("li");
-    li.append(el("span", "on qbox" + (i.stock === 0 ? " none" : "") + (i.stock < 0 ? (pre ? " owed" : " neg") : ""), pre && i.stock < 0 ? String(-i.stock) : String(i.stock)));
-    const w = el("span", "w"), nb = el("b", "spec", i.name || i.code);
-    if (pre) nb.append(el("span", "pre", "Pre-order"));
-    w.append(nb);
-    if (pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", null, "Owed to customers")); w.append(sm); }
-    if (i.decision) { const sm = el("small"); sm.append(el("b", "late", "Needs a decision")); w.append(sm); }
-    else if (!pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", "late", "Below zero, already oversold")); w.append(sm); }
-    else if (low) { const sm = el("small"); sm.append(el("b", "late", "Low stock, alert set at " + i.threshold)); w.append(sm); }
-    for (const e of i.incoming) { const sm = el("small"); sm.append(el("b", e.arrive && e.arrive < dayKey() ? "late" : null, "+" + e.qty + " coming in" + (e.arrive ? ", arriving " + sendTxt(e.arrive) + (e.arrive < dayKey() ? " (date passed)" : "") : ""))); w.append(sm); }
-    li.append(w);
-    const ob = el("span", "ob"), b = el("button", "btn sm", "Open"); b.type = "button"; b.addEventListener("click", () => openItem(i.code, false));
-    const bell = el("button", "btn sm bell" + (i.alert ? " on" : "") + (low ? " low" : "")); bell.type = "button"; bell.innerHTML = BELL;
-    if (i.alert) bell.append(el("span", "bb", i.threshold));
-    bell.setAttribute("aria-label", i.alert ? "Low stock alert at " + i.threshold : "Set a low stock alert");
-    bell.addEventListener("click", () => openItem(i.code, true));
-    ob.append(b, bell); li.append(ob); ul.append(li);
+  box.textContent = "";
+  $("it-coladd").disabled = busy;
+  const known = new Set(collections.map(c => c.id));
+  const groups = collections.map(c => ({ c, rows: list.filter(i => i.collection === c.id) }));
+  const loose = list.filter(i => !i.collection || !known.has(i.collection));
+  if (loose.length || !collections.length) groups.push({ c: null, rows: loose });
+  for (const g of groups) {
+    if (q && !g.rows.length) continue;
+    const sec = el("section", "bay"), head = el("div", "bay-head");
+    if (g.c && colEdit === g.c.id) {
+      const f = el("div", "setrow"), inp = el("input", "field"); inp.id = "it-colren"; inp.value = colEditVal; inp.maxLength = 60;
+      inp.addEventListener("input", () => { colEditVal = inp.value; });
+      const sv = el("button", "btn", "Save name"); sv.type = "button"; sv.disabled = busy;
+      sv.addEventListener("click", () => { const nm = colEditVal; colRun(() => window.miqItems.collection("rename", g.c.id, nm), "Section renamed.").then(ok => { if (ok) { colEdit = null; renderItems(); } }); });
+      f.append(inp, sv); head.append(f);
+    } else head.append(el("h2", null, g.c ? g.c.name : "Not in a collection"));
+    head.append(el("span", null, g.rows.length + (g.rows.length === 1 ? " item" : " items")));
+    const ul = el("ul", "rows orows");
+    if (!g.rows.length) ul.append(el("li", "empty", g.c ? "No items yet. Tap Add item." : "No items."));
+    for (const i of g.rows) ul.append(rowFor(i));
+    sec.append(head, ul);
+    if (g.c) {
+      const bar = el("div", "bar");
+      const add = el("button", "btn sm", "Add item"); add.type = "button"; add.disabled = busy; add.addEventListener("click", () => openPick(g.c.id));
+      const ren = el("button", "btn sm", colEdit === g.c.id ? "Cancel rename" : "Rename"); ren.type = "button"; ren.disabled = busy;
+      ren.addEventListener("click", () => { colEdit = colEdit === g.c.id ? null : g.c.id; colEditVal = g.c.name; colArm = ""; renderItems(); });
+      const del = el("button", "btn sm", colArm === "c" + g.c.id ? "Tap again to delete section" : "Delete section"); del.type = "button"; del.disabled = busy;
+      del.addEventListener("click", () => {
+        if (colArm !== "c" + g.c.id) { colArm = "c" + g.c.id; renderItems(); return; }
+        colArm = ""; colRun(() => window.miqItems.collection("remove", g.c.id), "Section deleted. Its items are now under Not in a collection.");
+      });
+      bar.append(add, ren, del); sec.append(bar);
+    }
+    box.append(sec);
   }
   const flagged = items.filter(i => i.decision);
   $("it-decide").hidden = !flagged.length;
@@ -1799,6 +1856,35 @@ function renderItems() {
   empty.textContent = items.length ? "No item matches that search." : "No items yet. They appear here once the stock list is loaded into the database.";
 }
 $("it-q").addEventListener("input", renderItems);
+$("it-coladd").addEventListener("click", async () => {
+  const m = $("it-colmsg"), name = $("it-colname").value.trim();
+  if (!name) { m.textContent = "Type a name for the section."; m.hidden = false; return; }
+  if (collections.some(c => c.name.toLowerCase() === name.toLowerCase())) { m.textContent = "That section is already listed below."; m.hidden = false; return; }
+  m.hidden = true;
+  if (await colRun(() => window.miqItems.collection("add", null, name), "Section added.")) $("it-colname").value = "";
+});
+let pickCol = null;
+function openPick(cid) { pickCol = cid; $("pk-q").value = ""; renderPick(); if (!$("itpick").open) $("itpick").showModal(); }
+function renderPick() {
+  const c = collections.find(x => x.id === pickCol); if (!c) { if ($("itpick").open) $("itpick").close(); return; }
+  $("pk-title").textContent = c.name;
+  const q = $("pk-q").value.trim().toLowerCase(), ul = $("pk-list"); ul.textContent = "";
+  const list = items.filter(i => i.collection !== pickCol && (!q || i.code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q)));
+  if (!list.length) ul.append(el("li", "empty", q ? "No item matches that search." : "Every item is already in this section."));
+  for (const i of list) {
+    const li = el("li"), w = el("span", "w");
+    w.append(el("b", "spec", i.name || i.code), el("small", null, i.collection && colName(i.collection) ? "Now in " + colName(i.collection) : "Not in a collection"));
+    const ob = el("span", "ob"), b = el("button", "btn sm go", "Add"); b.type = "button"; b.disabled = busy;
+    b.addEventListener("click", () => colRun(() => window.miqItems.moveTo(i.code, pickCol), "Added " + (i.name || i.code) + " to " + c.name + "."));
+    ob.append(b); li.append(w, ob); ul.append(li);
+  }
+}
+$("pk-q").addEventListener("input", renderPick);
+$("pk-close").addEventListener("click", () => $("itpick").close());
+$("it-col").addEventListener("change", e => {
+  if (!itCode) return; const v = e.target.value;
+  itRun(() => window.miqItems.moveTo(itCode, v === "" ? null : Number(v)), v === "" ? "Taken out of its section." : "Moved to " + colName(Number(v)) + ".");
+});
 
 let itCode = null, itPending = null;
 function itemByCode(c) { return items.find(i => i.code === c) || null; }
@@ -1812,6 +1898,10 @@ function renderItemSheet() {
   $("it-units").textContent = unitsHint(i);
   $("it-dec").hidden = !i.decision; if (i.decision) $("it-dec-text").textContent = decisionText(i);
   $("it-pre").checked = pre;
+  const sel = $("it-col"); sel.textContent = "";
+  const o0 = el("option", null, "Not in a collection"); o0.value = ""; sel.append(o0);
+  for (const c of collections) { const o = el("option", null, c.name); o.value = String(c.id); sel.append(o); }
+  sel.value = i.collection && collections.some(c => c.id === i.collection) ? String(i.collection) : ""; sel.disabled = busy;
   $("it-confirm").hidden = !itPending;
   if (itPending) $("it-confirm-text").textContent = "This takes " + i.code + " from " + i.stock + " to " + (i.stock - itPending.n) + ". It will go on pre-order. Continue?";
   const ul = $("it-inc"); ul.textContent = ""; ul.hidden = !i.incoming.length;
@@ -1855,7 +1945,7 @@ async function itRun(fn, okText) {
     if (e && e.code === "needs_preorder") { itPending = { n: Number(e.stock) - Number(e.after) }; return false; }
     itSay(e && e.code === "invalid_argument" && e.message ? e.message : "Could not save. Check the connection and try again.", true); return false;
   }
-  finally { busy = false; renderItemSheet(); }
+  finally { busy = false; renderItemSheet(); renderItems(); }
 }
 function itCount(v) { const n = Number(String(v).trim()); return String(v).trim() !== "" && Number.isInteger(n) && n >= 0 ? n : null; }
 function itMove(dir) {
@@ -2009,9 +2099,14 @@ $("lab-save").addEventListener("click", async () => {
     parts = snap.docs.map(pParse).sort((a, b) => a.t < b.t ? 1 : a.t > b.t ? -1 : 0);
     pReady = true; renderParts();
   }, fail);
+  db.collection("collections").onSnapshot(snap => {
+    collections = snap.docs.map(d => { const b = d.data() || {}; return { id: Number(d.id), name: typeof b.name === "string" ? b.name : "Section", sort: Number(b.sort) || 0 }; })
+      .sort((a, b) => a.sort - b.sort || a.id - b.id);
+    renderItems(); if (itCode) renderItemSheet(); if ($("itpick").open) renderPick();
+  }, fail);
   db.collection("items").onSnapshot(snap => {
     items = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null, type: b.type === "pre-order" ? "pre-order" : "stocked",
-      alert: b.alert !== false, decision: b.decision === "low" || b.decision === "zero" ? b.decision : null,
+      alert: b.alert !== false, collection: b.collection == null ? null : Number(b.collection), decision: b.decision === "low" || b.decision === "zero" ? b.decision : null,
       perSale: b.per_sale && typeof b.per_sale === "object" ? { min: b.per_sale.min == null ? null : Number(b.per_sale.min), max: b.per_sale.max == null ? null : Number(b.per_sale.max) } : null,
       incoming: Array.isArray(b.incoming) ? b.incoming.map(e => ({ id: e.id, qty: Number(e.qty) || 0, arrive: typeof e.arrive === "string" ? e.arrive : "", note: typeof e.note === "string" ? e.note : "" })) : [] }; })
       .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code, undefined, { numeric: true }));

@@ -37,6 +37,7 @@ Shopify order paid
 | `processed_orders` | Orders already counted, so none is counted twice | n8n |
 | `stock_log` | Every deduction with stock before and after | n8n |
 | `app_docs` | Rack counts, reserved/sold, containers, spare parts, history (and the retired Other stock tab's notes, kept for reference) | The app |
+| `item_collections` | Sections on the Shopify stock page (app only) | The app |
 | `item_incoming` | Shopify stock coming in (date, quantity, note) | The app |
 | `alert_outbox` | Every low-stock / below-zero alert sent | Database trigger |
 | `app_backups` | A full copy taken every night at 02:15 UTC, kept 30 days | Supabase schedule |
@@ -70,6 +71,15 @@ Each item shows its count, any low-stock or coming-in notes, an **Open** button 
 - **Bell**: the low stock alert. Its number is `stock_items.stock_threshold`, the same alert level n8n uses. "Turn alert off" sets `alert_on` to false.
 - **Below zero**: taking a stocked item below zero asks for confirmation first and then marks it pre-order.
 - **Needs a decision**: when a stocked item falls to or below its alert level, or goes below zero, the database flags it (`needs_decision`) and the box at the top of the page asks to switch it to pre-order or keep it as stocked. Nothing switches by itself.
+
+### Collections
+
+Items are grouped into sections on the Shopify stock page. This grouping is for the app only: Shopify, n8n, the variant mapping and the sheet never see it.
+
+- **Add section**, then **Add item** in a section to pick items into it. Each item sits in one section; anything unsorted shows under "Not in a collection".
+- **Rename** a section, or **Delete section** (tap twice). Deleting hides the section and moves its items to "Not in a collection"; no item is removed.
+- The **Section** menu in an item's Open pop-up moves it to another section.
+- Stored in `item_collections` and `stock_items.collection_id`.
 
 ### Alerts
 

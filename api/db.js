@@ -78,6 +78,14 @@ module.exports = async (req, res) => {
       const inId = b.incomingId == null ? null : Math.round(Number(b.incomingId));
       return reply(res, await rpc("app_incoming", { p_action: String(b.action || ""), p_code: id, p_id: inId, p_qty: qty, p_arrive: arrive, p_note: b.note == null ? null : String(b.note) }));
     }
+    if (op === "collection") {
+      const cid = b.collectionId == null ? null : Math.round(Number(b.collectionId));
+      return reply(res, await rpc("app_collection", { p_action: String(b.action || ""), p_id: cid, p_name: b.name == null ? null : String(b.name) }));
+    }
+    if (op === "item-collection") {
+      const cid = b.collectionId == null || b.collectionId === "" ? null : Math.round(Number(b.collectionId));
+      return reply(res, await rpc("app_item_collection", { p_code: id, p_collection: cid }));
+    }
     if (op === "item-type") {
       return reply(res, await rpc("app_item_type", { p_code: id, p_type: String(b.type || "") }));
     }

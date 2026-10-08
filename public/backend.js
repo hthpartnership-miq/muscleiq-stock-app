@@ -183,6 +183,8 @@
     async alert(code, on, threshold) { const r = await call("POST", { op: "item-alert", col: "items", id: code, on, threshold }); await sync().catch(() => {}); return r; },
     async decide(code, choice) { const r = await call("POST", { op: "item-decide", col: "items", id: code, choice }); await sync().catch(() => {}); return r; },
     async incoming(code, action, fields) { const r = await call("POST", Object.assign({ op: "item-incoming", col: "items", id: code, action }, fields || {})); await sync().catch(() => {}); return r; },
+    async collection(action, collectionId, name) { const r = await call("POST", { op: "collection", col: "items", id: "collections", action, collectionId, name }); await sync().catch(() => {}); return r; },
+    async moveTo(code, collectionId) { const r = await call("POST", { op: "item-collection", col: "items", id: code, collectionId }); await sync().catch(() => {}); return r; },
     async setType(code, type) { const r = await call("POST", { op: "item-type", col: "items", id: code, type }); await sync().catch(() => {}); return r; },
     async history(code) { const r = await call("POST", { op: "item-history", col: "items", id: code }); return r.rows || []; }
   };
