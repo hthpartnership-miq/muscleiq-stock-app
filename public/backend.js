@@ -176,6 +176,13 @@
     }
   };
 
+  /* ---------- Shopify stock items: staff movements ---------- */
+  window.miqItems = {
+    async move(code, kind, qty, note) { const r = await call("POST", { op: "item-move", col: "items", id: code, kind, qty, note }); await sync().catch(() => {}); return r; },
+    async setType(code, type) { const r = await call("POST", { op: "item-type", col: "items", id: code, type }); await sync().catch(() => {}); return r; },
+    async history(code) { const r = await call("POST", { op: "item-history", col: "items", id: code }); return r.rows || []; }
+  };
+
   const caps = { db, downloads };
   window.claude = { use: name => Promise.resolve(caps[name] || null) };
 })();

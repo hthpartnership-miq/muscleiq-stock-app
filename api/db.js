@@ -59,6 +59,15 @@ module.exports = async (req, res) => {
     if (op === "acquire") {
       return reply(res, await rpc("app_acquire", { p_col: col, p_id: id, p_holder: String(b.holder || ""), p_ttl_ms: Math.round(Number(b.ttlMs) || 30000) }));
     }
+    if (op === "item-move") {
+      return reply(res, await rpc("app_item_move", { p_code: id, p_kind: String(b.kind || ""), p_qty: Math.round(Number(b.qty)), p_note: b.note == null ? null : String(b.note) }));
+    }
+    if (op === "item-type") {
+      return reply(res, await rpc("app_item_type", { p_code: id, p_type: String(b.type || "") }));
+    }
+    if (op === "item-history") {
+      return reply(res, { rows: await rpc("app_item_history", { p_code: id }) });
+    }
     if (op === "set" || op === "update" || op === "delete") {
       if (op !== "delete" && !isObj(b.data)) return bad(res, "Document must be an object.");
       return reply(res, await rpc("app_write", { p_op: op, p_col: col, p_id: id, p_data: op === "delete" ? null : b.data }));

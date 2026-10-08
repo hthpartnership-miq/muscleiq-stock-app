@@ -60,8 +60,17 @@ Paste `supabase/RUN_ONCE_in_sql_editor.sql` into Supabase > SQL Editor and run i
 - Never commit passwords, keys or the passcode. They live in Vercel's environment variables.
 - QR labels point at the site's own address. Reprint them if the address changes.
 
+## Shopify stock page
+
+Tap an item to:
+- **Delivery in**: add stock that arrived (note the container or supplier).
+- **Stock take**: set the counted number.
+- **Take out**: remove stock for damage, samples or sales outside Shopify.
+- **Pre-order**: mark items you don't keep in stock. Their minus number shows as "owed to customers" and they never count as low stock.
+
+Every change is written to `stock_log` with the note, alongside the n8n order deductions, and shows under "Recent movements". These changes are not copied to the Google Sheet; update the sheet by hand if you want it to match.
+
 ## Not built yet
 
-- Adding stock to the Shopify stock items from the app (deliveries, stock takes). The page is read-only for now.
-- Pre-order items shown as "owed to customers" instead of a negative count.
-- Named staff logins. Everyone shares one passcode, so History shows "Someone".
+- Named staff logins. Everyone shares one passcode.
+- Adding new item codes or mapping rows from the app (done in Supabase for now). Everyone shares one passcode, so History shows "Someone".

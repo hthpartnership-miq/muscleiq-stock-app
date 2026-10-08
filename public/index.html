@@ -190,6 +190,21 @@ table.items .q{font-family:var(--display);font-size:22px;font-weight:600}
 table.items .q.neg{color:var(--sold-fg)}
 table.items .q.low{color:var(--low)}
 table.items td.when{font-size:13px;color:var(--muted)}
+table.items td.nm{padding:0}
+.itbtn{display:block;width:100%;min-height:52px;padding:9px 10px;border:0;background:none;text-align:left;color:inherit}
+.itbtn:hover b{text-decoration:underline}
+table.items .q.owed{color:var(--res-fg);font-size:17px}
+.pre{font-family:var(--body);font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--res);color:var(--res-ink);vertical-align:2px;margin-left:6px;white-space:nowrap}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);min-height:48px;font-weight:600;padding:6px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.35}
+.chk input{width:22px;height:22px;flex:none;margin-top:1px}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.hist li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.hist li small{display:block;color:var(--muted);font-size:12px}
+.hist .d{font-family:var(--display);font-size:18px;font-weight:600;text-align:right}
+.hist .d.up{color:var(--go)} .hist .d.down{color:var(--sold-fg)}
 @media (prefers-reduced-motion:no-preference){.cell,.tile,.btn{transition:border-color .12s}}
 </style>
 </head>
@@ -234,7 +249,7 @@ table.items td.when{font-size:13px;color:var(--muted)}
 
   <section id="view-items" hidden>
     <div style="display:flex;flex-direction:column;gap:14px">
-      <p class="note">Items taken off automatically when a Shopify order is paid. Counts are read-only here for now.</p>
+      <p class="note">Items taken off automatically when a Shopify order is paid. Tap an item to book a delivery in, do a stock take, take stock out or mark it as pre-order.</p>
       <div class="strip" id="it-strip"></div>
       <label class="it-search">Find an item<input class="field" id="it-q" type="search" autocomplete="off" placeholder="Name or item code"></label>
       <div class="scroll">
@@ -539,6 +554,27 @@ table.items td.when{font-size:13px;color:var(--muted)}
     <p class="msg" id="pe-msg" role="alert" hidden></p>
     <div class="fix"><button class="btn sold sm" id="pe-del">Delete this part</button></div>
     <div class="closebar"><button class="btn" id="pe-close">Close</button></div>
+  </div>
+</dialog>
+<dialog id="itdl" aria-labelledby="it-title">
+  <div class="sheet">
+    <div class="sh-head"><div><p class="eyebrow">Shopify stock item</p><h2 id="it-title" tabindex="-1" autofocus></h2><p class="code" id="it-code"></p></div></div>
+    <div class="qty"><span class="num" id="it-now">0</span><span id="it-unit">in stock</span></div>
+    <div class="seg" role="group" aria-label="What happened">
+      <button type="button" id="it-k-in" data-k="in" aria-pressed="true">Delivery in</button>
+      <button type="button" id="it-k-count" data-k="count" aria-pressed="false">Stock take</button>
+      <button type="button" id="it-k-out" data-k="out" aria-pressed="false">Take out</button>
+    </div>
+    <div class="fields">
+      <label class="wide" id="it-qty-l">How many arrived<input class="field" id="it-qty" type="number" inputmode="numeric" min="0" step="1"></label>
+      <label class="wide" id="it-note-l">Note (optional)<input class="field" id="it-note" type="text" maxlength="120" autocomplete="off" placeholder="e.g. container C194"></label>
+    </div>
+    <p class="note" id="it-preview"></p>
+    <button class="btn in" id="it-save">Save</button>
+    <p class="msg" id="it-msg" role="alert" hidden></p>
+    <label class="chk"><input type="checkbox" id="it-pre"><span>Pre-order item. Not kept in stock, so a minus number means orders waiting, and it never counts as low stock.</span></label>
+    <details id="it-hist-d"><summary>Recent movements</summary><ul class="hist" id="it-hist"></ul></details>
+    <div class="closebar"><button class="btn" id="it-close">Close</button></div>
   </div>
 </dialog>
 <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -1670,22 +1706,89 @@ function renderItems() {
   const list = items.filter(i => !q || i.code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q));
   body.textContent = "";
   for (const i of list) {
-    const tr = el("tr"), name = el("td"), qty = el("td", "q num", String(i.stock));
-    name.append(el("b", null, i.name || i.code), el("span", "code", i.code));
-    if (i.stock < 0) qty.classList.add("neg"); else if (i.stock <= i.threshold) qty.classList.add("low");
+    const pre = i.type === "pre-order";
+    const tr = el("tr"), name = el("td", "nm"), qty = el("td", "q num", pre && i.stock < 0 ? Math.abs(i.stock) + " owed" : String(i.stock));
+    const btn = el("button", "itbtn"); btn.type = "button"; btn.addEventListener("click", () => openItem(i.code));
+    const nb = el("b", null, i.name || i.code); if (pre) nb.append(el("span", "pre", "Pre-order"));
+    btn.append(nb, el("span", "code", i.code)); name.append(btn);
+    if (pre) { if (i.stock < 0) qty.classList.add("owed"); }
+    else if (i.stock < 0) qty.classList.add("neg"); else if (i.stock <= i.threshold) qty.classList.add("low");
     const d = i.updated ? new Date(i.updated) : null;
     tr.append(name, qty, el("td", "num", String(i.threshold)), el("td", "when", d && !isNaN(d) ? whenFmt.format(d) : "–"));
     body.append(tr);
   }
-  const neg = items.filter(i => i.stock < 0).length, low = items.filter(i => i.stock >= 0 && i.stock <= i.threshold).length;
+  const st = items.filter(i => i.type !== "pre-order"), preN = items.length - st.length;
+  const neg = st.filter(i => i.stock < 0).length, low = st.filter(i => i.stock >= 0 && i.stock <= i.threshold).length;
   const strip = $("it-strip"); strip.textContent = "";
   const part = (n, label) => { const s = el("span"); s.append(el("b", null, String(n)), document.createTextNode(" " + label)); return s; };
-  if (itemsReady) strip.append(part(items.length, "items"), part(low, "at or below alert level"), part(neg, "below zero"));
+  if (itemsReady) { strip.append(part(items.length, "items"), part(low, "at or below alert level"), part(neg, "below zero")); if (preN) strip.append(part(preN, "on pre-order")); }
   const empty = $("it-empty");
   empty.hidden = !itemsReady || list.length > 0;
   empty.textContent = items.length ? "No item matches that search." : "No items yet. They appear here once the stock list is loaded into the database.";
 }
 $("it-q").addEventListener("input", renderItems);
+
+let itCode = null, itKind = "in";
+const IT_KIND = {
+  in:    { label: "How many arrived", btn: "Book delivery in", note: "e.g. container C194" },
+  count: { label: "How many are there now (counted)", btn: "Save stock take", note: "e.g. weekly count" },
+  out:   { label: "How many to take out", btn: "Take out of stock", note: "e.g. damaged, sample, sold elsewhere" }
+};
+function itemByCode(c) { return items.find(i => i.code === c) || null; }
+function renderItemSheet() {
+  const i = itemByCode(itCode); if (!i) return;
+  const pre = i.type === "pre-order";
+  $("it-title").textContent = i.name || i.code; $("it-code").textContent = i.code;
+  $("it-now").textContent = pre && i.stock < 0 ? String(Math.abs(i.stock)) : String(i.stock);
+  $("it-unit").textContent = pre && i.stock < 0 ? "owed to customers" : "in stock";
+  $("it-pre").checked = pre;
+  for (const k of ["in","count","out"]) $("it-k-"+k).setAttribute("aria-pressed", String(k === itKind));
+  const K = IT_KIND[itKind];
+  $("it-qty-l").firstChild.textContent = K.label; $("it-note").placeholder = K.note; $("it-save").textContent = K.btn;
+  const v = $("it-qty").value.trim(), n = /^\d+$/.test(v) ? Number(v) : null;
+  let after = null;
+  if (n !== null) after = itKind === "in" ? i.stock + n : itKind === "out" ? i.stock - n : n;
+  $("it-preview").textContent = after === null ? "" : "Count goes from " + i.stock + " to " + after + ".";
+  $("it-save").disabled = busy || n === null || (itKind !== "count" && n === 0);
+}
+async function loadItemHistory() {
+  const ul = $("it-hist"); ul.textContent = "";
+  let rows = [];
+  try { rows = await window.miqItems.history(itCode); } catch (_) { ul.append(el("li", null, "Could not load the movements.")); return; }
+  if (!rows.length) { ul.append(el("li", null, "No movements yet.")); return; }
+  for (const r of rows) {
+    const li = el("li"), w = el("div"), d = new Date(r.t), ch = r.stock_after - r.stock_before;
+    w.append(el("span", null, r.kind === "order" ? "Order " + (r.order_name || "") : r.order_name));
+    w.append(el("small", null, (isNaN(d) ? "" : whenFmt.format(d)) + (r.note ? " · " + r.note : r.sku ? " · " + r.sku : "") + " · now " + r.stock_after));
+    li.append(w, el("span", "d " + (ch > 0 ? "up" : ch < 0 ? "down" : ""), (ch > 0 ? "+" : ch < 0 ? "−" : "") + Math.abs(ch)));
+    ul.append(li);
+  }
+}
+function openItem(code) {
+  itCode = code; itKind = "in"; $("it-qty").value = ""; $("it-note").value = ""; $("it-msg").hidden = true;
+  renderItemSheet(); $("itdl").showModal(); loadItemHistory();
+}
+for (const k of ["in","count","out"]) $("it-k-"+k).addEventListener("click", () => { itKind = k; $("it-msg").hidden = true; renderItemSheet(); });
+$("it-qty").addEventListener("input", renderItemSheet);
+$("it-close").addEventListener("click", () => $("itdl").close());
+$("itdl").addEventListener("close", () => { itCode = null; });
+$("it-save").addEventListener("click", async () => {
+  if (busy || !itCode) return;
+  const n = Number($("it-qty").value), m = $("it-msg");
+  busy = true; m.hidden = true; renderItemSheet();
+  try {
+    const r = await window.miqItems.move(itCode, itKind, n, $("it-note").value);
+    toast(r && r.unchanged ? "Count already " + r.stock + ". Nothing changed." : "Saved. " + itCode + " is now " + r.stock + ".");
+    $("it-qty").value = ""; $("it-note").value = ""; loadItemHistory();
+  } catch (e) { m.textContent = (e && e.message && e.code === "invalid_argument") ? e.message : "Could not save. Check the connection and try again."; m.hidden = false; }
+  finally { busy = false; renderItemSheet(); }
+});
+$("it-pre").addEventListener("change", async e => {
+  if (!itCode) return;
+  const want = e.target.checked ? "pre-order" : "stocked";
+  try { await window.miqItems.setType(itCode, want); toast(want === "pre-order" ? "Marked as pre-order." : "Marked as kept in stock."); }
+  catch (_) { e.target.checked = !e.target.checked; toast("Could not change it. Try again."); }
+});
 
 function fromHash() { const id = decodeURIComponent(location.hash.slice(1)).toLowerCase(); if (sku(id)) { showTab("stock"); openSheet(id, true); } }
 
@@ -1796,9 +1899,9 @@ $("lab-save").addEventListener("click", async () => {
     pReady = true; renderParts();
   }, fail);
   db.collection("items").onSnapshot(snap => {
-    items = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null }; })
+    items = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null, type: b.type === "pre-order" ? "pre-order" : "stocked" }; })
       .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code, undefined, { numeric: true }));
-    itemsReady = true; renderItems();
+    itemsReady = true; renderItems(); if (itCode) renderItemSheet();
   }, fail);
   db.collection("log").orderBy("day", "desc").limit(31).onSnapshot(snap => {
     const all = [];
