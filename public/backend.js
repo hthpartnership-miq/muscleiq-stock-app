@@ -64,7 +64,7 @@
       let j = null; try { j = await r.json(); } catch (_) {}
       if (r.status === 503 && j && j.code === "not_configured") { setupNotice(j.message); throw err("not_configured", j.message); }
       if (r.status === 404) { setupNotice("The /api/db function was not found."); throw err("not_configured"); }
-      if (!r.ok) throw err((j && j.code) || (r.status >= 500 ? "unavailable" : "invalid_argument"), j && j.message);
+      if (!r.ok) throw Object.assign({}, j || {}, err((j && j.code) || (r.status >= 500 ? "unavailable" : "invalid_argument"), j && j.message));
       return j || {};
     }
   }
@@ -179,6 +179,10 @@
   /* ---------- Shopify stock items: staff movements ---------- */
   window.miqItems = {
     async move(code, kind, qty, note) { const r = await call("POST", { op: "item-move", col: "items", id: code, kind, qty, note }); await sync().catch(() => {}); return r; },
+    async change(code, kind, qty, note, preorder) { const r = await call("POST", { op: "item-change", col: "items", id: code, kind, qty, note, preorder: preorder === true }); await sync().catch(() => {}); return r; },
+    async alert(code, on, threshold) { const r = await call("POST", { op: "item-alert", col: "items", id: code, on, threshold }); await sync().catch(() => {}); return r; },
+    async decide(code, choice) { const r = await call("POST", { op: "item-decide", col: "items", id: code, choice }); await sync().catch(() => {}); return r; },
+    async incoming(code, action, fields) { const r = await call("POST", Object.assign({ op: "item-incoming", col: "items", id: code, action }, fields || {})); await sync().catch(() => {}); return r; },
     async setType(code, type) { const r = await call("POST", { op: "item-type", col: "items", id: code, type }); await sync().catch(() => {}); return r; },
     async history(code) { const r = await call("POST", { op: "item-history", col: "items", id: code }); return r.rows || []; }
   };

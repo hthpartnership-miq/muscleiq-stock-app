@@ -194,6 +194,15 @@ table.items td.nm{padding:0}
 .itbtn{display:block;width:100%;min-height:52px;padding:9px 10px;border:0;background:none;text-align:left;color:inherit}
 .itbtn:hover b{text-decoration:underline}
 table.items .q.owed{color:var(--res-fg);font-size:17px}
+.qbox.neg{background:var(--none-bg);color:var(--none)}
+.qbox.owed{background:var(--res);color:var(--res-ink)}
+.decide{background:var(--surface);border:1px solid var(--out);border-left:5px solid var(--out);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.decide h2{font-size:22px;font-weight:600}
+.decide .rows{border:0;background:none}
+.decide .rows li{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 0}
+.decide .rows li .w{flex:1 1 200px}
+.decide .rows li .ob{display:flex;gap:6px;flex-wrap:wrap}
+.confirm{background:var(--low-bg);border:1px solid var(--out);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;font-weight:600}
 .pre{font-family:var(--body);font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--res);color:var(--res-ink);vertical-align:2px;margin-left:6px;white-space:nowrap}
 .seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .seg button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);min-height:48px;font-weight:600;padding:6px}
@@ -248,16 +257,16 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
   </section>
 
   <section id="view-items" hidden>
-    <div style="display:flex;flex-direction:column;gap:14px">
-      <p class="note">Items taken off automatically when a Shopify order is paid. Tap an item to book a delivery in, do a stock take, take stock out or mark it as pre-order.</p>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <p class="note">Items taken off automatically when a Shopify order is paid. Tap Open to put stock in, take it out, count it or add stock coming in. The bell sets a low stock alert.</p>
+      <div class="decide" id="it-decide" hidden>
+        <h2>Needs a decision</h2>
+        <p class="note">These reached their alert level or went below zero. Switch each one to pre-order, or keep it as stocked.</p>
+        <ul class="rows" id="it-decide-list"></ul>
+      </div>
       <div class="strip" id="it-strip"></div>
       <label class="it-search">Find an item<input class="field" id="it-q" type="search" autocomplete="off" placeholder="Name or item code"></label>
-      <div class="scroll">
-        <table class="items">
-          <thead><tr><th scope="col">Item</th><th scope="col">In stock</th><th scope="col">Alert at</th><th scope="col">Last change</th></tr></thead>
-          <tbody id="it-body"></tbody>
-        </table>
-      </div>
+      <ul class="rows orows" id="it-list"></ul>
       <p class="empty" id="it-empty" hidden></p>
     </div>
   </section>
@@ -558,22 +567,45 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
 </dialog>
 <dialog id="itdl" aria-labelledby="it-title">
   <div class="sheet">
-    <div class="sh-head"><div><p class="eyebrow">Shopify stock item</p><h2 id="it-title" tabindex="-1" autofocus></h2><p class="code" id="it-code"></p></div></div>
+    <div class="sh-head"><div><p class="eyebrow">Shopify stock</p><h2 id="it-title" tabindex="-1" autofocus></h2><p class="code" id="it-code"></p></div></div>
+    <div class="decide" id="it-dec" hidden>
+      <p id="it-dec-text"></p>
+      <div class="acts"><button class="btn res" id="it-dec-pre">Switch to pre-order</button><button class="btn" id="it-dec-keep">Keep as stocked</button></div>
+    </div>
     <div class="qty"><span class="num" id="it-now">0</span><span id="it-unit">in stock</span></div>
-    <div class="seg" role="group" aria-label="What happened">
-      <button type="button" id="it-k-in" data-k="in" aria-pressed="true">Delivery in</button>
-      <button type="button" id="it-k-count" data-k="count" aria-pressed="false">Stock take</button>
-      <button type="button" id="it-k-out" data-k="out" aria-pressed="false">Take out</button>
+    <p class="note" id="it-units"></p>
+    <div class="fields"><label class="wide">How many<input class="field" id="it-n" type="number" inputmode="numeric" min="1" step="1" value="1"></label></div>
+    <div class="acts">
+      <button class="btn" id="it-out">Take out</button>
+      <button class="btn go" id="it-in">Put in stock</button>
     </div>
-    <div class="fields">
-      <label class="wide" id="it-qty-l">How many arrived<input class="field" id="it-qty" type="number" inputmode="numeric" min="0" step="1"></label>
-      <label class="wide" id="it-note-l">Note (optional)<input class="field" id="it-note" type="text" maxlength="120" autocomplete="off" placeholder="e.g. container C194"></label>
+    <div class="confirm" id="it-confirm" hidden>
+      <p id="it-confirm-text"></p>
+      <div class="acts"><button class="btn res" id="it-confirm-yes">Yes, mark pre-order</button><button class="btn" id="it-confirm-no">Cancel</button></div>
     </div>
-    <p class="note" id="it-preview"></p>
-    <button class="btn in" id="it-save">Save</button>
-    <p class="msg" id="it-msg" role="alert" hidden></p>
+    <details id="it-count">
+      <summary>Set exact count (stock take)</summary>
+      <div class="setrow"><input id="it-set" type="number" inputmode="numeric" min="0" step="1" aria-label="Exact count"><button class="btn" id="it-setb">Save count</button></div>
+    </details>
+    <div class="fix">
+      <p class="eyebrow">Coming in</p>
+      <ul class="rows orows" id="it-inc"></ul>
+      <div class="fields">
+        <label>Arrival date<input class="field" id="it-date" type="date"></label>
+        <label>How many<input class="field" id="it-incn" type="number" inputmode="numeric" min="1" step="1"></label>
+        <label class="wide">Note (optional)<input class="field" id="it-incnote" type="text" maxlength="120" autocomplete="off" placeholder="e.g. container C194"></label>
+      </div>
+      <button class="btn in" id="it-addinc">Add stock coming in</button>
+    </div>
+    <details id="it-alert">
+      <summary>Low stock alert</summary>
+      <div class="setrow"><input id="it-low" type="number" inputmode="numeric" min="0" step="1" aria-label="Alert when stock is at or below"><button class="btn" id="it-lowsave">Save alert</button></div>
+      <p class="note" style="margin-top:8px">Type the stock number to be warned at. When stock falls to or below it, an email goes to hthpartnership@gmail.com and the item asks for a decision here.</p>
+      <button class="btn sm" id="it-lowclear" style="margin-top:8px">Turn alert off</button>
+    </details>
     <label class="chk"><input type="checkbox" id="it-pre"><span>Pre-order item. Not kept in stock, so a minus number means orders waiting, and it never counts as low stock.</span></label>
     <details id="it-hist-d"><summary>Recent movements</summary><ul class="hist" id="it-hist"></ul></details>
+    <p class="msg" id="it-msg" role="status" hidden></p>
     <div class="closebar"><button class="btn" id="it-close">Close</button></div>
   </div>
 </dialog>
@@ -1701,60 +1733,103 @@ function showTab(name) {
 /* ---------- Shopify stock (items n8n deducts from) ---------- */
 let items = [], itemsReady = false;
 const whenFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const isPre = i => i.type === "pre-order";
+const isLow = i => !isPre(i) && i.alert && i.stock <= i.threshold;
+function decisionText(i) {
+  return i.decision === "zero"
+    ? i.code + " is now " + i.stock + ", already oversold."
+    : i.code + " reached its alert level: " + i.stock + " left, alert at " + i.threshold + ".";
+}
+function unitsHint(i) {
+  const p = i.perSale;
+  if (!p || p.min == null) return "Not in the Shopify mapping, so orders never change this count.";
+  if (p.min === p.max) return p.min === 1 ? "Counted the same way as orders: 1 taken off per sale." :
+    "Counted the same way as orders: " + p.min + " taken off per sale" + (p.min === 2 ? ", so 10 pairs = 20." : ".");
+  return "Counted the same way as orders: " + p.min + " to " + p.max + " taken off per sale, depending on the product sold. Count single units.";
+}
+async function decide(code, choice) {
+  if (busy) return; busy = true; renderItems(); if (itCode) renderItemSheet();
+  try { await window.miqItems.decide(code, choice); toast(choice === "pre-order" ? code + " is now on pre-order." : code + " kept as stocked."); }
+  catch (_) { toast("Could not save. Check the connection and try again."); }
+  finally { busy = false; renderItems(); if (itCode) renderItemSheet(); }
+}
 function renderItems() {
-  const body = $("it-body"), q = $("it-q").value.trim().toLowerCase();
+  const ul = $("it-list"), q = $("it-q").value.trim().toLowerCase();
   const list = items.filter(i => !q || i.code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q));
-  body.textContent = "";
+  ul.textContent = "";
   for (const i of list) {
-    const pre = i.type === "pre-order";
-    const tr = el("tr"), name = el("td", "nm"), qty = el("td", "q num", pre && i.stock < 0 ? Math.abs(i.stock) + " owed" : String(i.stock));
-    const btn = el("button", "itbtn"); btn.type = "button"; btn.addEventListener("click", () => openItem(i.code));
-    const nb = el("b", null, i.name || i.code); if (pre) nb.append(el("span", "pre", "Pre-order"));
-    btn.append(nb, el("span", "code", i.code)); name.append(btn);
-    if (pre) { if (i.stock < 0) qty.classList.add("owed"); }
-    else if (i.stock < 0) qty.classList.add("neg"); else if (i.stock <= i.threshold) qty.classList.add("low");
-    const d = i.updated ? new Date(i.updated) : null;
-    tr.append(name, qty, el("td", "num", String(i.threshold)), el("td", "when", d && !isNaN(d) ? whenFmt.format(d) : "–"));
-    body.append(tr);
+    const pre = isPre(i), low = isLow(i);
+    const li = el("li");
+    li.append(el("span", "on qbox" + (i.stock === 0 ? " none" : "") + (i.stock < 0 ? (pre ? " owed" : " neg") : ""), pre && i.stock < 0 ? String(-i.stock) : String(i.stock)));
+    const w = el("span", "w"), nb = el("b", "spec", i.name || i.code);
+    if (pre) nb.append(el("span", "pre", "Pre-order"));
+    w.append(nb, el("small", null, i.code));
+    if (pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", null, "Owed to customers")); w.append(sm); }
+    if (i.decision) { const sm = el("small"); sm.append(el("b", "late", "Needs a decision")); w.append(sm); }
+    else if (!pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", "late", "Below zero, already oversold")); w.append(sm); }
+    else if (low) { const sm = el("small"); sm.append(el("b", "late", "Low stock, alert set at " + i.threshold)); w.append(sm); }
+    for (const e of i.incoming) { const sm = el("small"); sm.append(el("b", e.arrive && e.arrive < dayKey() ? "late" : null, "+" + e.qty + " coming in" + (e.arrive ? ", arriving " + sendTxt(e.arrive) + (e.arrive < dayKey() ? " (date passed)" : "") : ""))); w.append(sm); }
+    li.append(w);
+    const ob = el("span", "ob"), b = el("button", "btn sm", "Open"); b.type = "button"; b.addEventListener("click", () => openItem(i.code, false));
+    const bell = el("button", "btn sm bell" + (i.alert ? " on" : "") + (low ? " low" : "")); bell.type = "button"; bell.innerHTML = BELL;
+    if (i.alert) bell.append(el("span", "bb", i.threshold));
+    bell.setAttribute("aria-label", i.alert ? "Low stock alert at " + i.threshold : "Set a low stock alert");
+    bell.addEventListener("click", () => openItem(i.code, true));
+    ob.append(b, bell); li.append(ob); ul.append(li);
   }
-  const st = items.filter(i => i.type !== "pre-order"), preN = items.length - st.length;
-  const neg = st.filter(i => i.stock < 0).length, low = st.filter(i => i.stock >= 0 && i.stock <= i.threshold).length;
+  const flagged = items.filter(i => i.decision);
+  $("it-decide").hidden = !flagged.length;
+  const dl = $("it-decide-list"); dl.textContent = "";
+  for (const i of flagged) {
+    const li = el("li"), w = el("span", "w");
+    w.append(el("b", null, i.name || i.code), el("small", null, decisionText(i)));
+    const ob = el("span", "ob");
+    const p = el("button", "btn sm res", "Switch to pre-order"); p.type = "button"; p.disabled = busy; p.addEventListener("click", () => decide(i.code, "pre-order"));
+    const k = el("button", "btn sm", "Keep as stocked"); k.type = "button"; k.disabled = busy; k.addEventListener("click", () => decide(i.code, "keep"));
+    ob.append(p, k); li.append(w, ob); dl.append(li);
+  }
+  const st = items.filter(i => !isPre(i)), preN = items.length - st.length;
+  const neg = st.filter(i => i.stock < 0).length, low = st.filter(i => i.stock >= 0 && isLow(i)).length;
   const strip = $("it-strip"); strip.textContent = "";
   const part = (n, label) => { const s = el("span"); s.append(el("b", null, String(n)), document.createTextNode(" " + label)); return s; };
-  if (itemsReady) { strip.append(part(items.length, "items"), part(low, "at or below alert level"), part(neg, "below zero")); if (preN) strip.append(part(preN, "on pre-order")); }
+  if (itemsReady) { strip.append(part(items.length, "items"), part(low, "low on stock"), part(neg, "below zero")); if (preN) strip.append(part(preN, "on pre-order")); }
   const empty = $("it-empty");
   empty.hidden = !itemsReady || list.length > 0;
   empty.textContent = items.length ? "No item matches that search." : "No items yet. They appear here once the stock list is loaded into the database.";
 }
 $("it-q").addEventListener("input", renderItems);
 
-let itCode = null, itKind = "in";
-const IT_KIND = {
-  in:    { label: "How many arrived", btn: "Book delivery in", note: "e.g. container C194" },
-  count: { label: "How many are there now (counted)", btn: "Save stock take", note: "e.g. weekly count" },
-  out:   { label: "How many to take out", btn: "Take out of stock", note: "e.g. damaged, sample, sold elsewhere" }
-};
+let itCode = null, itPending = null;
 function itemByCode(c) { return items.find(i => i.code === c) || null; }
+function itSay(t, isErr) { const m = $("it-msg"); m.textContent = t; m.hidden = !t; m.className = isErr ? "msg" : "done"; }
 function renderItemSheet() {
   const i = itemByCode(itCode); if (!i) return;
-  const pre = i.type === "pre-order";
+  const pre = isPre(i);
   $("it-title").textContent = i.name || i.code; $("it-code").textContent = i.code;
-  $("it-now").textContent = pre && i.stock < 0 ? String(Math.abs(i.stock)) : String(i.stock);
+  $("it-now").textContent = pre && i.stock < 0 ? String(-i.stock) : String(i.stock);
   $("it-unit").textContent = pre && i.stock < 0 ? "owed to customers" : "in stock";
+  $("it-units").textContent = unitsHint(i);
+  $("it-dec").hidden = !i.decision; if (i.decision) $("it-dec-text").textContent = decisionText(i);
   $("it-pre").checked = pre;
-  for (const k of ["in","count","out"]) $("it-k-"+k).setAttribute("aria-pressed", String(k === itKind));
-  const K = IT_KIND[itKind];
-  $("it-qty-l").firstChild.textContent = K.label; $("it-note").placeholder = K.note; $("it-save").textContent = K.btn;
-  const v = $("it-qty").value.trim(), n = /^\d+$/.test(v) ? Number(v) : null;
-  let after = null;
-  if (n !== null) after = itKind === "in" ? i.stock + n : itKind === "out" ? i.stock - n : n;
-  $("it-preview").textContent = after === null ? "" : "Count goes from " + i.stock + " to " + after + ".";
-  $("it-save").disabled = busy || n === null || (itKind !== "count" && n === 0);
+  $("it-confirm").hidden = !itPending;
+  if (itPending) $("it-confirm-text").textContent = "This takes " + i.code + " from " + i.stock + " to " + (i.stock - itPending.n) + ". It will go on pre-order. Continue?";
+  const ul = $("it-inc"); ul.textContent = ""; ul.hidden = !i.incoming.length;
+  for (const e of i.incoming) {
+    const li = el("li"); li.append(el("span", "on", "+" + e.qty));
+    li.append(el("span", "w", (e.arrive ? "Arriving " + sendTxt(e.arrive) + (e.arrive < dayKey() ? " (date passed)" : "") : "No date") + (e.note ? " · " + e.note : "")));
+    const ob = el("span", "ob");
+    const a = el("button", "btn go sm", "Arrived, add to stock"); a.type = "button"; a.disabled = busy; a.addEventListener("click", () => itIncoming("arrived", { incomingId: e.id }, "Added " + e.qty + " to stock."));
+    const r = el("button", "btn sm", "Remove"); r.type = "button"; r.disabled = busy; r.addEventListener("click", () => itIncoming("remove", { incomingId: e.id }, "Removed."));
+    ob.append(a, r); li.append(ob); ul.append(li);
+  }
+  $("it-lowclear").hidden = !i.alert;
+  for (const id of ["it-out", "it-in", "it-setb", "it-addinc", "it-lowsave", "it-lowclear", "it-confirm-yes", "it-dec-pre", "it-dec-keep"]) $(id).disabled = busy;
 }
 async function loadItemHistory() {
-  const ul = $("it-hist"); ul.textContent = "";
+  const ul = $("it-hist"), code = itCode; ul.textContent = "";
   let rows = [];
-  try { rows = await window.miqItems.history(itCode); } catch (_) { ul.append(el("li", null, "Could not load the movements.")); return; }
+  try { rows = await window.miqItems.history(code); } catch (_) { ul.append(el("li", null, "Could not load the movements.")); return; }
+  if (code !== itCode) return;
   if (!rows.length) { ul.append(el("li", null, "No movements yet.")); return; }
   for (const r of rows) {
     const li = el("li"), w = el("div"), d = new Date(r.t), ch = r.stock_after - r.stock_before;
@@ -1764,30 +1839,65 @@ async function loadItemHistory() {
     ul.append(li);
   }
 }
-function openItem(code) {
-  itCode = code; itKind = "in"; $("it-qty").value = ""; $("it-note").value = ""; $("it-msg").hidden = true;
-  renderItemSheet(); $("itdl").showModal(); loadItemHistory();
+function openItem(code, toAlert) {
+  const i = itemByCode(code); if (!i) return;
+  itCode = code; itPending = null; itSay("", false);
+  $("it-n").value = 1; $("it-set").value = ""; $("it-incn").value = ""; $("it-date").value = ""; $("it-incnote").value = "";
+  $("it-low").value = i.alert ? i.threshold : ""; $("it-alert").open = !!toAlert; $("it-count").open = false;
+  renderItemSheet(); if (!$("itdl").open) $("itdl").showModal(); loadItemHistory();
 }
-for (const k of ["in","count","out"]) $("it-k-"+k).addEventListener("click", () => { itKind = k; $("it-msg").hidden = true; renderItemSheet(); });
-$("it-qty").addEventListener("input", renderItemSheet);
-$("it-close").addEventListener("click", () => $("itdl").close());
-$("itdl").addEventListener("close", () => { itCode = null; });
-$("it-save").addEventListener("click", async () => {
-  if (busy || !itCode) return;
-  const n = Number($("it-qty").value), m = $("it-msg");
-  busy = true; m.hidden = true; renderItemSheet();
-  try {
-    const r = await window.miqItems.move(itCode, itKind, n, $("it-note").value);
-    toast(r && r.unchanged ? "Count already " + r.stock + ". Nothing changed." : "Saved. " + itCode + " is now " + r.stock + ".");
-    $("it-qty").value = ""; $("it-note").value = ""; loadItemHistory();
-  } catch (e) { m.textContent = (e && e.message && e.code === "invalid_argument") ? e.message : "Could not save. Check the connection and try again."; m.hidden = false; }
+async function itRun(fn, okText) {
+  if (busy || !itCode) return false;
+  busy = true; itSay("", false); renderItemSheet();
+  try { const r = await fn(); itSay(typeof okText === "function" ? okText(r) : okText, false); loadItemHistory(); return r || true; }
+  catch (e) {
+    if (e && e.code === "needs_preorder") { itPending = { n: Number(e.stock) - Number(e.after) }; return false; }
+    itSay(e && e.code === "invalid_argument" && e.message ? e.message : "Could not save. Check the connection and try again.", true); return false;
+  }
   finally { busy = false; renderItemSheet(); }
+}
+function itCount(v) { const n = Number(String(v).trim()); return String(v).trim() !== "" && Number.isInteger(n) && n >= 0 ? n : null; }
+function itMove(dir) {
+  const i = itemByCode(itCode); if (!i) return;
+  const n = itCount($("it-n").value);
+  if (!n) return itSay("Enter how many, 1 or more.", true);
+  if (dir < 0 && !isPre(i) && i.stock - n < 0) { itPending = { n }; itSay("", false); renderItemSheet(); return; }
+  itRun(() => window.miqItems.change(itCode, dir < 0 ? "out" : "in", n, null, false),
+    r => (dir < 0 ? "Took " + n + " out. " : "Put " + n + " in. ") + r.stock + (isPre(i) && r.stock < 0 ? " (" + (-r.stock) + " owed)." : " in stock.")).then(r => { if (r) $("it-n").value = 1; });
+}
+$("it-out").addEventListener("click", () => itMove(-1));
+$("it-in").addEventListener("click", () => itMove(1));
+$("it-confirm-no").addEventListener("click", () => { itPending = null; renderItemSheet(); });
+$("it-confirm-yes").addEventListener("click", () => {
+  if (!itPending) return; const n = itPending.n; itPending = null;
+  itRun(() => window.miqItems.change(itCode, "out", n, null, true), r => "Took " + n + " out. Now on pre-order, " + (-r.stock) + " owed.").then(r => { if (r) $("it-n").value = 1; });
 });
+$("it-setb").addEventListener("click", () => {
+  const n = itCount($("it-set").value);
+  if (n === null) return itSay("Enter the counted number, 0 or more.", true);
+  itRun(() => window.miqItems.change(itCode, "count", n, "Stock take", false), r => r.unchanged ? "Count already " + r.stock + ". Nothing changed." : "Count saved: " + r.stock + " in stock.").then(r => { if (r) $("it-set").value = ""; });
+});
+function itIncoming(action, fields, okText) { return itRun(() => window.miqItems.incoming(itCode, action, fields), okText); }
+$("it-addinc").addEventListener("click", () => {
+  const n = itCount($("it-incn").value);
+  if (!n) return itSay("Enter how many are coming in, 1 or more.", true);
+  itIncoming("add", { qty: n, arrive: $("it-date").value || null, note: $("it-incnote").value }, "Added " + n + " coming in.").then(r => { if (r) { $("it-incn").value = ""; $("it-date").value = ""; $("it-incnote").value = ""; } });
+});
+$("it-lowsave").addEventListener("click", () => {
+  const n = itCount($("it-low").value);
+  if (n === null) return itSay("Type the stock number to be warned at, 0 or more.", true);
+  itRun(() => window.miqItems.alert(itCode, true, n), "Alert set at " + n + ".");
+});
+$("it-lowclear").addEventListener("click", () => { itRun(() => window.miqItems.alert(itCode, false), "Alert turned off."); $("it-low").value = ""; });
+$("it-dec-pre").addEventListener("click", () => decide(itCode, "pre-order"));
+$("it-dec-keep").addEventListener("click", () => decide(itCode, "keep"));
+$("it-close").addEventListener("click", () => $("itdl").close());
+$("itdl").addEventListener("close", () => { itCode = null; itPending = null; });
 $("it-pre").addEventListener("change", async e => {
   if (!itCode) return;
   const want = e.target.checked ? "pre-order" : "stocked";
-  try { await window.miqItems.setType(itCode, want); toast(want === "pre-order" ? "Marked as pre-order." : "Marked as kept in stock."); }
-  catch (_) { e.target.checked = !e.target.checked; toast("Could not change it. Try again."); }
+  try { await window.miqItems.setType(itCode, want); itSay(want === "pre-order" ? "Marked as pre-order." : "Marked as kept in stock.", false); }
+  catch (_) { e.target.checked = !e.target.checked; itSay("Could not change it. Try again.", true); }
 });
 
 function fromHash() { const id = decodeURIComponent(location.hash.slice(1)).toLowerCase(); if (sku(id)) { showTab("stock"); openSheet(id, true); } }
@@ -1899,7 +2009,10 @@ $("lab-save").addEventListener("click", async () => {
     pReady = true; renderParts();
   }, fail);
   db.collection("items").onSnapshot(snap => {
-    items = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null, type: b.type === "pre-order" ? "pre-order" : "stocked" }; })
+    items = snap.docs.map(d => { const b = d.data() || {}; return { code: d.id, name: typeof b.name === "string" ? b.name : "", stock: Number(b.stock) || 0, threshold: Number(b.threshold) || 0, updated: b.updated || null, type: b.type === "pre-order" ? "pre-order" : "stocked",
+      alert: b.alert !== false, decision: b.decision === "low" || b.decision === "zero" ? b.decision : null,
+      perSale: b.per_sale && typeof b.per_sale === "object" ? { min: b.per_sale.min == null ? null : Number(b.per_sale.min), max: b.per_sale.max == null ? null : Number(b.per_sale.max) } : null,
+      incoming: Array.isArray(b.incoming) ? b.incoming.map(e => ({ id: e.id, qty: Number(e.qty) || 0, arrive: typeof e.arrive === "string" ? e.arrive : "", note: typeof e.note === "string" ? e.note : "" })) : [] }; })
       .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code, undefined, { numeric: true }));
     itemsReady = true; renderItems(); if (itCode) renderItemSheet();
   }, fail);

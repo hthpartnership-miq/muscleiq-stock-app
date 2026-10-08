@@ -31,7 +31,7 @@ const isObj = v => v !== null && typeof v === "object" && !Array.isArray(v);
 function parse(s) { try { const v = JSON.parse(s); return isObj(v) ? v : null; } catch (_) { return null; } }
 function bad(res, message) { return res.status(400).json({ code: "invalid_argument", message }); }
 function reply(res, out) {
-  if (out && out.error) return res.status(400).json({ code: out.error, message: out.message || "" });
+  if (out && out.error) return res.status(400).json(Object.assign({}, out, { code: out.error, message: out.message || "" }));
   return res.status(200).json(out);
 }
 
@@ -61,6 +61,22 @@ module.exports = async (req, res) => {
     }
     if (op === "item-move") {
       return reply(res, await rpc("app_item_move", { p_code: id, p_kind: String(b.kind || ""), p_qty: Math.round(Number(b.qty)), p_note: b.note == null ? null : String(b.note) }));
+    }
+    if (op === "item-change") {
+      return reply(res, await rpc("app_item_change", { p_code: id, p_kind: String(b.kind || ""), p_qty: Math.round(Number(b.qty)), p_note: b.note == null ? null : String(b.note), p_preorder: b.preorder === true }));
+    }
+    if (op === "item-alert") {
+      const on = b.on !== false;
+      return reply(res, await rpc("app_item_alert", { p_code: id, p_on: on, p_threshold: on ? Math.round(Number(b.threshold)) : null }));
+    }
+    if (op === "item-decide") {
+      return reply(res, await rpc("app_item_decide", { p_code: id, p_choice: String(b.choice || "") }));
+    }
+    if (op === "item-incoming") {
+      const qty = b.qty == null ? null : Math.round(Number(b.qty));
+      const arrive = typeof b.arrive === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.arrive) ? b.arrive : null;
+      const inId = b.incomingId == null ? null : Math.round(Number(b.incomingId));
+      return reply(res, await rpc("app_incoming", { p_action: String(b.action || ""), p_code: id, p_id: inId, p_qty: qty, p_arrive: arrive, p_note: b.note == null ? null : String(b.note) }));
     }
     if (op === "item-type") {
       return reply(res, await rpc("app_item_type", { p_code: id, p_type: String(b.type || "") }));

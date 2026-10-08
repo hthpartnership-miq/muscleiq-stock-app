@@ -62,13 +62,20 @@ Paste `supabase/RUN_ONCE_in_sql_editor.sql` into Supabase > SQL Editor and run i
 
 ## Shopify stock page
 
-Tap an item to:
-- **Delivery in**: add stock that arrived (note the container or supplier).
-- **Stock take**: set the counted number.
-- **Take out**: remove stock for damage, samples or sales outside Shopify.
-- **Pre-order**: mark items you don't keep in stock. Their minus number shows as "owed to customers" and they never count as low stock.
+Each item shows its count, any low-stock or coming-in notes, an **Open** button and a **bell**, the same as Other stock.
 
-Every change is written to `stock_log` with the note, alongside the n8n order deductions, and shows under "Recent movements". These changes are not copied to the Google Sheet; update the sheet by hand if you want it to match.
+- **Open**: take out, put in stock, set an exact count (stock take), add stock coming in and mark it arrived, tick Pre-order, and see recent movements. The hint under the count says how many units each Shopify sale takes off, from the variant mapping.
+- **Bell**: the low stock alert. Its number is `stock_items.stock_threshold`, the same alert level n8n uses. "Turn alert off" sets `alert_on` to false.
+- **Below zero**: taking a stocked item below zero asks for confirmation first and then marks it pre-order.
+- **Needs a decision**: when a stocked item falls to or below its alert level, or goes below zero, the database flags it (`needs_decision`) and the box at the top of the page asks to switch it to pre-order or keep it as stocked. Nothing switches by itself.
+
+### Alerts
+
+The check runs inside the database (trigger `stock_items_watch`), so it catches orders from n8n and changes made in the app alike. Each alert is saved in `alert_outbox` and posted to the n8n workflow "Muscle IQ Stock Alerts (Database)", which emails hthpartnership@gmail.com. The webhook address and its shared secret are in `app_settings` (not in this repo). To add WhatsApp later, add a step to that workflow.
+
+The n8n order flow still sends its own low-stock email as well, kept for now for debugging.
+
+App changes are not copied to the Google Sheet; update the sheet by hand if you want it to match.
 
 ## Not built yet
 
