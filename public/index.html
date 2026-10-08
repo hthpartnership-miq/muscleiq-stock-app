@@ -194,6 +194,7 @@ table.items td.nm{padding:0}
 .itbtn{display:block;width:100%;min-height:52px;padding:9px 10px;border:0;background:none;text-align:left;color:inherit}
 .itbtn:hover b{text-decoration:underline}
 table.items .q.owed{color:var(--res-fg);font-size:17px}
+#it-list .spec{font-family:var(--body);font-size:16px;font-weight:600;line-height:1.3}
 .qbox.neg{background:var(--none-bg);color:var(--none)}
 .qbox.owed{background:var(--res);color:var(--res-ink)}
 .decide{background:var(--surface);border:1px solid var(--out);border-left:5px solid var(--out);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
@@ -236,7 +237,6 @@ table.items .q.owed{color:var(--res-fg);font-size:17px}
     <button role="tab" id="tab-out" data-tab="out" aria-selected="false">Reserved / sold</button>
     <button role="tab" id="tab-items" data-tab="items" aria-selected="false">Shopify stock</button>
     <button role="tab" id="tab-inc" data-tab="inc" aria-selected="false">Racks coming in</button>
-    <button role="tab" id="tab-x" data-tab="x" aria-selected="false">Other stock</button>
     <button role="tab" id="tab-parts" data-tab="parts" aria-selected="false">Spare parts</button>
     <button role="tab" id="tab-labels" data-tab="labels" aria-selected="false">QR labels</button>
     <button role="tab" id="tab-history" data-tab="history" aria-selected="false">History</button>
@@ -1724,8 +1724,9 @@ async function delPart() {
 
 /* ---------- Wiring ---------- */
 function showTab(name) {
+  if (name === "x") name = "items";
   for (const t of ["stock","items","out","inc","x","parts","labels","history"]) {
-    $("view-"+t).hidden = t !== name; $("tab-"+t).setAttribute("aria-selected", String(t === name));
+    $("view-"+t).hidden = t !== name; const tb = $("tab-"+t); if (tb) tb.setAttribute("aria-selected", String(t === name));
   }
   if (name === "labels") renderLabels();
   try { localStorage.setItem("rs-tab", name); } catch (_) {}
@@ -1763,7 +1764,7 @@ function renderItems() {
     li.append(el("span", "on qbox" + (i.stock === 0 ? " none" : "") + (i.stock < 0 ? (pre ? " owed" : " neg") : ""), pre && i.stock < 0 ? String(-i.stock) : String(i.stock)));
     const w = el("span", "w"), nb = el("b", "spec", i.name || i.code);
     if (pre) nb.append(el("span", "pre", "Pre-order"));
-    w.append(nb, el("small", null, i.code));
+    w.append(nb);
     if (pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", null, "Owed to customers")); w.append(sm); }
     if (i.decision) { const sm = el("small"); sm.append(el("b", "late", "Needs a decision")); w.append(sm); }
     else if (!pre && i.stock < 0) { const sm = el("small"); sm.append(el("b", "late", "Below zero, already oversold")); w.append(sm); }

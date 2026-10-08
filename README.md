@@ -36,7 +36,9 @@ Shopify order paid
 | `variant_mapping` | Which items each Shopify variant takes off, and how many | You, by hand (keep in step with the sheet) |
 | `processed_orders` | Orders already counted, so none is counted twice | n8n |
 | `stock_log` | Every deduction with stock before and after | n8n |
-| `app_docs` | Rack counts, reserved/sold, containers, other stock, spare parts, history | The app |
+| `app_docs` | Rack counts, reserved/sold, containers, spare parts, history (and the retired Other stock tab's notes, kept for reference) | The app |
+| `item_incoming` | Shopify stock coming in (date, quantity, note) | The app |
+| `alert_outbox` | Every low-stock / below-zero alert sent | Database trigger |
 | `app_backups` | A full copy taken every night at 02:15 UTC, kept 30 days | Supabase schedule |
 
 All tables are closed to Supabase's public API. Only the app's server function and n8n can reach them.
