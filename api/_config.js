@@ -15,5 +15,7 @@ const publicUrl = Object.keys(process.env).find(k => k.endsWith("SUPABASE_URL") 
 module.exports = {
   SUPABASE_URL: (pick(["SUPABASE_URL"]) || (publicUrl ? process.env[publicUrl] : "")).replace(/\/+$/, ""),
   SUPABASE_KEY: pick(["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"]),
-  PASSCODE: process.env.APP_PASSCODE || ""
+  PASSCODE: process.env.APP_PASSCODE || "",
+  // Optional second passcode for suppliers: opens the Spare parts tab only (see api/db.js).
+  SUPPLIER_PASSCODE: process.env.SUPPLIER_PASSCODE || ""
 };

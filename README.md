@@ -93,6 +93,10 @@ The n8n order flow still sends its own low-stock email as well, kept for now for
 
 App changes are not copied to the Google Sheet; update the sheet by hand if you want it to match.
 
+## Supplier passcode
+
+Add `SUPPLIER_PASSCODE` in Vercel (Settings > Environment Variables), different from `APP_PASSCODE`, then redeploy. Someone who opens the site with it sees only **Spare parts** and can add, edit and delete parts there. The server sends that passcode no other data and refuses any other change, so hiding the tabs is not the only protection. Every Spare parts change (staff or supplier) adds a History line marked "Staff" or "Supplier". To cut suppliers off, change or delete the variable and redeploy. Leave it unset and nothing changes.
+
 ## Not built yet
 
 - Named staff logins. Everyone shares one passcode.

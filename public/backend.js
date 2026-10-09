@@ -9,6 +9,18 @@
     set(v) { try { localStorage.setItem(PASS_KEY, v); } catch (_) {} }
   };
   let pass = store.get(), state = null, ver = null, started = false, blocked = false;
+  // Which passcode is in use ("staff" or "supplier"). Remembered so a supplier never sees the staff layout flash up.
+  const ROLE_KEY = "miq-role";
+  function setRole(r) {
+    if (r !== "staff" && r !== "supplier") return;
+    if (document.documentElement.dataset.role !== r) {
+      document.documentElement.dataset.role = r;
+      window.dispatchEvent(new CustomEvent("miq-role", { detail: r }));
+    }
+    try { localStorage.setItem(ROLE_KEY, r); } catch (_) {}
+  }
+  try { const r0 = localStorage.getItem(ROLE_KEY); if (r0 === "supplier" || r0 === "staff") document.documentElement.dataset.role = r0; } catch (_) {}
+  window.miqRole = () => document.documentElement.dataset.role || "staff";
   const listeners = new Set();
   const err = (code, message) => ({ code, message: message || code });
   const clone = v => JSON.parse(JSON.stringify(v));
@@ -60,7 +72,7 @@
           body: body ? JSON.stringify(body) : undefined
         });
       } catch (_) { throw err("unavailable", "No connection."); }
-      if (r.status === 401) { await askPass(tries > 0 || !!pass); continue; }
+      if (r.status === 401) { state = null; ver = null; await askPass(tries > 0 || !!pass); continue; }
       let j = null; try { j = await r.json(); } catch (_) {}
       if (r.status === 503 && j && j.code === "not_configured") { setupNotice(j.message); throw err("not_configured", j.message); }
       if (r.status === 404) { setupNotice("The /api/db function was not found."); throw err("not_configured"); }
@@ -74,6 +86,7 @@
   function sync() {
     const run = chain.then(async () => {
       const j = await call("GET", null, ver != null ? "?v=" + encodeURIComponent(ver) : "");
+      if (j.role) setRole(j.role);
       if (!j.same) { state = j.data || {}; ver = j.ver; }
       notify();
     });

@@ -157,6 +157,11 @@ select{background:var(--surface);border:1px solid var(--line);border-radius:var(
 .dsum b{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 7px;border-radius:99px;background:#131a25;color:#ffffff;font-size:16px}
 .dsum .today{background:#f0891c;color:#1c1000} .dsum .tmrw{background:#f2c200;color:#231a00}
 .dsum .zero{opacity:.55}
+/* Supplier passcode: Spare parts only. The server sends nothing else; this just tidies the layout. */
+:root[data-role="supplier"] .tabs button:not([data-tab="parts"]),
+:root[data-role="supplier"] header .total,
+:root[data-role="supplier"] #status,
+:root[data-role="supplier"] section[id^="view-"]:not(#view-parts){display:none!important}
 .field{border:1px solid var(--line);background:var(--bg);border-radius:var(--r);min-height:48px;padding:8px 12px;width:100%;min-width:0;font-weight:400;color:var(--ink);font-size:16px}
 .fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .fields label{display:flex;flex-direction:column;gap:3px;font-size:13px;font-weight:600;color:var(--muted);min-width:0}
@@ -727,7 +732,7 @@ let ready = false, busy = false, openSku = null, scanned = false;
 const stock = new Map();
 let entries = [], reserved = [];
 const resBySku = new Map();
-const KIND = { in:"Put in", reserve:"Reserved", sold:"Sold", out:"Taken out", "res-sold":"Sold (was reserved)", release:"Reservation undone, back in stock", unsold:"Sale undone, back in stock", "sold-res":"Moved back to reserved", "del-res":"Reserved entry deleted", "del-sold":"Sold entry deleted", dispatch:"Dispatched", set:"Stock take" };
+const KIND = { in:"Put in", reserve:"Reserved", sold:"Sold", out:"Taken out", "res-sold":"Sold (was reserved)", release:"Reservation undone, back in stock", unsold:"Sale undone, back in stock", "sold-res":"Moved back to reserved", "del-res":"Reserved entry deleted", "del-sold":"Sold entry deleted", dispatch:"Dispatched", set:"Stock take", "part-add":"Spare part added", "part-edit":"Spare part changed", "part-del":"Spare part deleted" };
 const dCls = e => e.k === "reserve" ? "res" : (e.k === "sold" || e.k === "res-sold" || e.k === "out" || e.k === "dispatch") ? "sold" : e.d > 0 ? "in" : "";
 const dTxt = e => e.d > 0 ? "+"+e.d : e.d < 0 ? "−"+Math.abs(e.d) : String(e.n || "");
 const qty = id => num((stock.get(id) || {}).qty);
@@ -1040,9 +1045,9 @@ async function renderHistory() {
     li.append(el("span", "t", e.t ? timeFmt.format(new Date(e.t)) : ""));
     li.append(el("span", "d "+dCls(e), dTxt(e)));
     const w = el("span", "w", s ? s.g.name : e.s);
-    const who = (e.by && ps[e.by] && ps[e.by].name) || "Someone";
+    const who = e.who || (e.by && ps[e.by] && ps[e.by].name) || "Someone";
     w.append(el("small", null, (s ? s.spec : "")+" · "+(KIND[e.k] || "Changed")+(e.order ? " (order "+e.order+")" : "")+" · "+who));
-    li.append(w, el("span", "q", e.inc ? "" : e.q+" in stock"));
+    li.append(w, el("span", "q", e.inc || e.part ? "" : e.q+" in stock"));
     ul.append(li);
   }
 }
@@ -1812,8 +1817,19 @@ async function delPart() {
 }
 
 /* ---------- Wiring ---------- */
+const isSupplier = () => document.documentElement.dataset.role === "supplier";
+function applyRole() {
+  const sup = isSupplier();
+  document.querySelector("header.top h1").textContent = sup ? "Spare parts" : "Stock";
+  if (sup) {
+    showTab("parts");
+    document.querySelectorAll("dialog[open]").forEach(d => { if (d.id !== "pdl") d.close(); });
+  }
+}
+window.addEventListener("miq-role", applyRole);
 function showTab(name) {
   if (name === "x") name = "items";
+  if (isSupplier()) name = "parts";
   for (const t of ["stock","items","out","inc","x","parts","labels","history"]) {
     $("view-"+t).hidden = t !== name; const tb = $("tab-"+t); if (tb) tb.setAttribute("aria-selected", String(t === name));
   }
@@ -2086,7 +2102,7 @@ $("it-pre").addEventListener("change", async e => {
   catch (_) { e.target.checked = !e.target.checked; itSay("Could not change it. Try again.", true); }
 });
 
-function fromHash() { const id = decodeURIComponent(location.hash.slice(1)).toLowerCase(); if (sku(id)) { showTab("stock"); openSheet(id, true); } }
+function fromHash() { if (isSupplier()) return; const id = decodeURIComponent(location.hash.slice(1)).toLowerCase(); if (sku(id)) { showTab("stock"); openSheet(id, true); } }
 
 buildBays();
 for (const g of GROUPS) { const o = el("option", null, g.name); o.value = g.id; $("lab-group").append(o); }
@@ -2154,7 +2170,7 @@ $("pdl").addEventListener("close", () => { pEdit = null; pArm = false; });
 window.addEventListener("hashchange", fromHash);
 let savedTab = null; try { savedTab = localStorage.getItem("rs-tab"); } catch (_) {}
 if (savedTab === "labels" || savedTab === "history" || savedTab === "out" || savedTab === "inc" || savedTab === "x" || savedTab === "parts" || savedTab === "items") showTab(savedTab);
-renderStock(); renderItems(); renderOut(); renderInc(); renderX(); renderParts(); renderHistory(); fromHash();
+renderStock(); renderItems(); renderOut(); renderInc(); renderX(); renderParts(); renderHistory(); fromHash(); applyRole();
 
 $("csv").addEventListener("click", async () => {
   const rows = [["Item code","Rack","Type","Height cm","Ratio","Weight kg or special details","Style","In stock","Reserved"]];
@@ -2210,7 +2226,7 @@ $("lab-save").addEventListener("click", async () => {
   }, fail);
   db.collection("log").orderBy("day", "desc").limit(31).onSnapshot(snap => {
     const all = [];
-    for (const d of snap.docs) { const b = d.data() || {}; const es = b.entries || {}; for (const k in es) { const e = es[k]; if (e && typeof e.d === "number") all.push({ day: b.day || d.id, inc: !!e.inc, s: String(e.s), d: e.d, n: num(e.n), q: num(e.q), k: e.k, t: e.t, by: e.by || null, order: typeof e.order === "string" ? e.order : "" }); } }
+    for (const d of snap.docs) { const b = d.data() || {}; const es = b.entries || {}; for (const k in es) { const e = es[k]; if (e && typeof e.d === "number") all.push({ day: b.day || d.id, inc: !!e.inc, s: String(e.s), d: e.d, n: num(e.n), q: num(e.q), k: e.k, t: e.t, by: e.by || null, order: typeof e.order === "string" ? e.order : "", who: typeof e.who === "string" ? e.who : "", part: e.part === true }); } }
     all.sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : 0));
     entries = all; renderHistory(); if (openSku) renderSheet();
   }, fail);

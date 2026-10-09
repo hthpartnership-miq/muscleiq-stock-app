@@ -4,12 +4,15 @@
 //
 // Environment variables (Vercel > Project > Settings > Environment Variables):
 //   APP_PASSCODE                 required  the passcode staff type to open the app
+//   SUPPLIER_PASSCODE            optional  a second passcode for suppliers. It only reads and changes Spare parts;
+//                                          every other tab's data is filtered out here, on the server.
 //   SUPABASE_URL                 added by Vercel's Supabase integration (https://<project>.supabase.co)
 //   SUPABASE_SERVICE_ROLE_KEY    added by Vercel's Supabase integration. Server-side only, never sent to the browser.
 
 const crypto = require("crypto");
 
-const { SUPABASE_URL, SUPABASE_KEY, PASSCODE } = require("./_config");
+const { SUPABASE_URL, SUPABASE_KEY, PASSCODE, SUPPLIER_PASSCODE } = require("./_config");
+const SUPPLIER_COLS = ["parts"];
 
 async function rpc(fn, args) {
   const r = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
@@ -21,11 +24,19 @@ async function rpc(fn, args) {
   return r.json();
 }
 
-function passOk(given) {
+function same(given, secret) {
   const a = crypto.createHash("sha256").update(String(given || "")).digest();
-  const b = crypto.createHash("sha256").update(PASSCODE).digest();
+  const b = crypto.createHash("sha256").update(String(secret)).digest();
   return crypto.timingSafeEqual(a, b);
 }
+// "staff" for the main passcode, "supplier" for the supplier passcode, otherwise null.
+function roleOf(given) {
+  if (!given) return null;
+  if (same(given, PASSCODE)) return "staff";
+  if (SUPPLIER_PASSCODE && SUPPLIER_PASSCODE !== PASSCODE && same(given, SUPPLIER_PASSCODE)) return "supplier";
+  return null;
+}
+function forbidden(res) { return res.status(403).json({ code: "not_granted", message: "This passcode can only change Spare parts." }); }
 
 const isObj = v => v !== null && typeof v === "object" && !Array.isArray(v);
 function parse(s) { try { const v = JSON.parse(s); return isObj(v) ? v : null; } catch (_) { return null; } }
@@ -41,13 +52,21 @@ module.exports = async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY || !PASSCODE) {
     return res.status(503).json({ code: "not_configured", message: "Connect Supabase to this Vercel project and add APP_PASSCODE, then redeploy. See README.md." });
   }
-  if (!passOk(req.headers["x-passcode"])) return res.status(401).json({ code: "passcode", message: "Wrong passcode." });
+  const role = roleOf(req.headers["x-passcode"]);
+  if (!role) return res.status(401).json({ code: "passcode", message: "Wrong passcode." });
+  const supplier = role === "supplier";
 
   try {
     if (req.method === "GET") {
       const v = req.query && req.query.v;
       const known = v !== undefined && v !== "" && /^\d+$/.test(String(v)) ? Number(v) : null;
-      return reply(res, await rpc("app_read", { p_known: known }));
+      const out = await rpc("app_read", { p_known: known });
+      if (out && supplier && out.data) {
+        const d = {}; for (const c of SUPPLIER_COLS) d[c] = out.data[c] || {};
+        out.data = d;
+      }
+      if (out && !out.error) out.role = role;
+      return reply(res, out);
     }
     if (req.method !== "POST") return res.status(405).json({ code: "invalid_argument", message: "Use GET or POST." });
 
@@ -56,6 +75,11 @@ module.exports = async (req, res) => {
     const { op, col, id } = b;
     if (typeof col !== "string" || typeof id !== "string") return bad(res, "Missing collection or id.");
 
+    if (supplier && !(SUPPLIER_COLS.includes(col) && ["acquire", "set", "update", "delete"].includes(op))) return forbidden(res);
+    if (col === "parts" && (op === "set" || op === "update" || op === "delete")) {
+      if (op !== "delete" && !isObj(b.data)) return bad(res, "Document must be an object.");
+      return reply(res, await rpc("app_part_write", { p_op: op, p_id: id, p_data: op === "delete" ? null : b.data, p_who: supplier ? "Supplier" : "Staff" }));
+    }
     if (op === "acquire") {
       return reply(res, await rpc("app_acquire", { p_col: col, p_id: id, p_holder: String(b.holder || ""), p_ttl_ms: Math.round(Number(b.ttlMs) || 30000) }));
     }
