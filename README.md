@@ -101,3 +101,7 @@ Add `SUPPLIER_PASSCODE` in Vercel (Settings > Environment Variables), different 
 
 - Named staff logins. Everyone shares one passcode.
 - Adding new item codes or mapping rows from the app (done in Supabase for now). Everyone shares one passcode, so History shows "Someone".
+
+## Orders from Shopify (since 26 Oct 2026)
+
+Shopify sends order webhooks straight to the Supabase Edge Function `shopify-order-paid` (code in `supabase/functions/shopify-order-paid`); n8n is no longer in the order path. Webhooks: **Order payment** (orders/paid) and **Order creation** (orders/create — only acted on when the order is already paid, e.g. TikTok Shop). Both point at the same function link, which includes the key stored in `app_settings.shopify_webhook_token`. Each order is recorded once in `processed_orders`, so getting both webhooks for one order never deducts twice. The deduction itself is the database function `process_shopify_order`.

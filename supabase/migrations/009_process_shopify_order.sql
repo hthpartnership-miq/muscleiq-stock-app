@@ -1,0 +1,4 @@
+-- Applied in Supabase on 26 Oct 2026 as "process_shopify_order_function" (copied here for the record).
+-- Called by the Edge Function supabase/functions/shopify-order-paid (Shopify webhook), which replaced the n8n order flow.
+-- Same logic as the n8n query: record the order once, map variants, take stock off, write stock_log.
+-- To see the live definition: SELECT pg_get_functiondef('public.process_shopify_order(jsonb)'::regprocedure);
