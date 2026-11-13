@@ -54,7 +54,8 @@ button{cursor:pointer}
 .total{text-align:right}
 .total .num{font-size:40px;line-height:1;font-weight:700}
 
-html,body{overflow-x:hidden;overscroll-behavior:none;max-width:100%}
+html,body{overflow-x:hidden;overflow-x:clip;overscroll-behavior:none;max-width:100%}
+/* clip (not hidden) so body is not a scroll container: with overscroll-behavior:none a hidden-overflow body swallowed mouse-wheel scrolling on desktop */
 .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);overflow-x:auto;overflow-y:hidden;overscroll-behavior:none;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{flex:none;background:none;border:0;white-space:nowrap;padding:10px 12px;min-height:44px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent}
